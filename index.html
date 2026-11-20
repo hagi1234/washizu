@@ -963,7 +963,7 @@ function advertise(){
   NET.api.presence({hosting:ad}).catch(()=>{});
 }
 function saveHost(){if(NET.mode==='host')lsSet('glass-host',JSON.stringify({code:NET.code,S}));}
-async function hostTable(resume){
+async function hostTable(resume,n=4){
   const api=await netReady();
   if(!api){NET.err='この画面では通信機能が使えません。claude.ai にサインインした状態で、このアーティファクトのページを開いてください。';render();return;}
   if(resume){
@@ -972,7 +972,7 @@ async function hostTable(resume){
     S=saved.S; NET.code=saved.code; S.humans[0]=NET.cid;
   }else{
     lsSet('glass-nick',NET.nick);
-    NET.code=randCode(); S=blankState('lobby'); S.humans=[NET.cid,null,null,null]; S.names=[NET.nick||'ホスト',null,null,null];
+    NET.code=randCode(); S=blankState('lobby',n===3?3:4); S.humans=[NET.cid,null,null,null]; S.names=[NET.nick||'ホスト',null,null,null];
   }
   NET.mode='host'; NET.ep=Date.now(); NET.seq=0; ME=0; SPECT=false; NET.err=''; NET.lastAd='';
   try{NET.tr=await api.join('t-'+NET.code);}catch(e){NET.mode='solo';NET.err='卓を作れませんでした。時間をおいてもう一度お試しください。';S=blankState('netmenu');render();return;}
@@ -1181,7 +1181,7 @@ function renderOverlay(){
     <p class="lead">卓を立てて友達を待つか、開いている卓に参加します。友達には先にこのアーティファクトを共有してください（「共有」メニューから、操作できる以上の権限で）。</p>
     ${err}
     <div class="field"><label for="nickIn">表示名</label><input id="nickIn" maxlength="12" autocomplete="nickname" value="${esc(NET.nick)}" placeholder="例: たろう"></div>
-    <div class="actions"><button class="btn primary" data-o="host">卓を立てる</button></div>
+    <div class="actions"><button class="btn primary" data-o="host">四麻の卓を立てる</button><button class="btn primary" data-o="host3">三麻の卓を立てる</button></div>
     <div class="field"><label>開いている卓</label><div class="tlist" id="tlist">${tableListHTML()}</div></div>
     <div class="field"><label for="codeIn">卓コードで参加</label><div class="inrow"><input id="codeIn" maxlength="4" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="4文字"><button class="btn" data-o="joinCode">参加</button></div></div>
     <div class="actions"><button class="btn" data-o="back">戻る</button></div>`;
@@ -1245,7 +1245,7 @@ $('panel').addEventListener('click',e=>{
   else if(o==='mode3'||o==='mode4'){setMode(o==='mode3'?3:4);}
   else if(o==='net'){NET.err='';S=blankState('netmenu');render();netReady().then(()=>{if(S.phase==='netmenu'){const ni=$('nickIn');if(ni&&!ni.value&&NET.nick)ni.value=NET.nick;updateTableList();}});}
   else if(o==='back'){NET.err='';S=blankState('title');render();}
-  else if(o==='host'){if(!NET.nick){NET.err='表示名を入力してください。';$('panel').dataset.view='';render();return;}hostTable(false);}
+  else if(o==='host'||o==='host3'){if(!NET.nick){NET.err='表示名を入力してください。';$('panel').dataset.view='';render();return;}hostTable(false,o==='host3'?3:4);}
   else if(o==='joinCode'){if(!NET.nick){NET.err='表示名を入力してください。';$('panel').dataset.view='';render();return;}joinTable(($('codeIn')||{}).value);}
   else if(o==='joinT'){if(!NET.nick){NET.err='表示名を入力してください。';$('panel').dataset.view='';render();return;}joinTable(b.dataset.code);}
   else if(o==='resumeHost'){hostTable(true);}
