@@ -449,13 +449,13 @@ const HOVER=window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
 /* ---------- game state ---------- */
 let S=null, timer=null, ME=0, SPECT=false;
-const UI={view:false,assist:true,help:false,sel:null,riichiMode:false,pending:false,aka:1,len:1};
-try{const u=JSON.parse(lsGet('glass-ui')||'{}');if(typeof u.assist==='boolean')UI.assist=u.assist;if([0,1,2,3].includes(u.aka))UI.aka=u.aka;if([1,2].includes(u.len))UI.len=u.len;}catch(e){}
-function saveUI(){lsSet('glass-ui',JSON.stringify({assist:UI.assist,aka:UI.aka,len:UI.len}));}
+const UI={view:false,assist:true,help:false,sel:null,riichiMode:false,pending:false,aka:1,len:1,glass:true};
+try{const u=JSON.parse(lsGet('glass-ui')||'{}');if(typeof u.assist==='boolean')UI.assist=u.assist;if([0,1,2,3].includes(u.aka))UI.aka=u.aka;if([1,2].includes(u.len))UI.len=u.len;if(typeof u.glass==='boolean')UI.glass=u.glass;}catch(e){}
+function saveUI(){lsSet('glass-ui',JSON.stringify({assist:UI.assist,aka:UI.aka,len:UI.len,glass:UI.glass}));}
 
 function blankState(phase,n=4){
   const z=v=>[v,v,v,v];
-  return{phase:phase||'title',n,len:UI.len,aka:UI.aka,akaIds:[],scores:z(n===3?35000:25000),kita:[[],[],[],[]],rin:0,dealer:0,handNo:1,honba:0,pot:0,hands:[[],[],[],[]],melds:[[],[],[],[]],discards:[[],[],[],[]],
+  return{phase:phase||'title',n,len:UI.len,glass:UI.glass,aka:UI.aka,akaIds:[],scores:z(n===3?35000:25000),kita:[[],[],[],[]],rin:0,dealer:0,handNo:1,honba:0,pot:0,hands:[[],[],[],[]],melds:[[],[],[],[]],discards:[[],[],[],[]],
     riichi:z(false),riichiIdx:z(-1),ippatsu:z(false),doraInd:[],uraInd:[],wall:[],dead:[],drawn:z(null),furitenTemp:z(false),kuikae:[[],[],[],[]],
     names:null,humans:['local',null,null,null],awaiting:null,result:null,claim:null,msg:'',turn:0,kans:0,rinshan:false,lastDiscard:null,next:null};
 }
@@ -496,14 +496,14 @@ function ctxFor(p,tsumo,extra={}){
 }
 function schedule(fn,args,delay){S.next={fn,args};clearTimeout(timer);timer=setTimeout(()=>{const n=S.next;S.next=null;if(n&&FN[n.fn])FN[n.fn](...n.args);},delay);}
 
-function initGame(names,humans,n=4,aka=UI.aka,len=UI.len){
-  S=blankState('play',n); S.names=names; S.humans=humans; S.aka=aka; S.len=len===2?2:1;
+function initGame(names,humans,n=4,aka=UI.aka,len=UI.len,glass=UI.glass){
+  S=blankState('play',n); S.names=names; S.humans=humans; S.aka=aka; S.len=len===2?2:1; S.glass=glass!==false;
   startHand();
 }
 function newSolo(n=4){NET.mode='solo';ME=0;SPECT=false;initGame(null,['local',null,null,null],n);}
 function startHand(){
   S.akaIds=akaIdsFor(S.n,S.aka);
-  const tiles=shuffle(makeTiles(S.n===3)); for(const t of tiles)if(S.akaIds.includes(t.id))t.r=true;
+  const tiles=shuffle(makeTiles(S.n===3)); for(const t of tiles){if(S.akaIds.includes(t.id))t.r=true;if(S.glass===false)t.g=false;}
   S.dead=tiles.splice(0,14); S.rin=0;
   S.doraInd=[S.dead[4]]; S.uraInd=[S.dead[5],S.dead[7],S.dead[9],S.dead[11],S.dead[13]];
   S.hands=[[],[],[],[]];
@@ -588,7 +588,7 @@ function discard(p,id,decl){
   if(!S.riichi[p])S.furitenTemp[p]=false;
   sortHand(p); S.awaiting=null;
   if(p===ME){UI.sel=null;UI.riichiMode=false;}
-  S.msg=decl?`<em>${pname(p)} リーチ</em> — ${tileName(t.k)}`:`${pname(p)}: ${tileName(t.k)}${t.g?'':'（不透明牌）'}`;
+  S.msg=decl?`<em>${pname(p)} リーチ</em> — ${tileName(t.k)}`:`${pname(p)}: ${tileName(t.k)}${t.g||S.glass===false?'':'（不透明牌）'}`;
   S.claim={from:p,tid:t.id,i:0,phase:'ron',kind:'discard',offered:[]};
   render(); schedule('claimStep',[],300);
 }
@@ -888,7 +888,7 @@ function parseTables(peers){
     if(p.isMe&&p.sameTab)continue;
     const h=p.presence&&p.presence.hosting;
     if(!h||typeof h!=='object'||typeof h.code!=='string'||!/^[a-z0-9]{4}$/.test(h.code))continue;
-    out.push({code:h.code,nick:cleanNick(h.nick),n:Math.max(1,Math.min(4,Math.floor(num(h.n,1)))),N:num(h.N,4)===3?3:4,L:num(h.L,1)===2?2:1,st:!!h.st});
+    out.push({code:h.code,nick:cleanNick(h.nick),n:Math.max(1,Math.min(4,Math.floor(num(h.n,1)))),N:num(h.N,4)===3?3:4,L:num(h.L,1)===2?2:1,G:h.G!==false,st:!!h.st});
   }
   return out;
 }
@@ -900,7 +900,7 @@ function toWire(){
   return{code:NET.code,ep:NET.ep,seq:++NET.seq,ph:s.phase,sc:s.scores,dl:s.dealer,hn:s.handNo,hb:s.honba,pot:s.pot,wl:s.wall.length,
     dora:E(s.doraInd),ura:(s.phase==='result'||s.phase==='over')?E(s.uraInd):'',h:s.hands.map(E),dr:s.drawn,
     md:s.melds.map(ms=>ms.map(m=>[m.type,m.k,E(m.tiles),m.from,m.calledId??-1])),ds:s.discards.map(E),
-    dc:s.discards.map(d=>d.map((t,i)=>t.called?i:-1).filter(i=>i>=0)),ri:s.riichi,rx:s.riichiIdx,ip:s.ippatsu,fu:s.furitenTemp,kz:s.kuikae,n:s.n,ln:s.len,ak:s.aka,ai:s.akaIds,kt:(s.kita||[[],[],[],[]]).map(E),
+    dc:s.discards.map(d=>d.map((t,i)=>t.called?i:-1).filter(i=>i>=0)),ri:s.riichi,rx:s.riichiIdx,ip:s.ippatsu,fu:s.furitenTemp,kz:s.kuikae,n:s.n,ln:s.len,gl:s.glass!==false,ak:s.aka,ai:s.akaIds,kt:(s.kita||[[],[],[],[]]).map(E),
     tn:s.turn,ld:s.lastDiscard,rs:s.rinshan,msg:String(s.msg||'').slice(0,200),aw:s.awaiting,rl:s.result,nm:s.names,hm:s.humans,cf:s.claim?[s.claim.from,s.claim.tid]:null,busy:!!s.next};
 }
 function fromWire(d){
@@ -914,8 +914,8 @@ function fromWire(d){
   s.discards.forEach((ds,p)=>dc[p].forEach(i=>{if(ds[i])ds[i].called=true;}));
   s.riichi=arr4(d.ri,Boolean); s.riichiIdx=arr4(d.rx,x=>num(x,-1)); s.ippatsu=arr4(d.ip,Boolean); s.furitenTemp=arr4(d.fu,Boolean);
   s.kuikae=arr4(d.kz,x=>Array.isArray(x)?x.map(clampK):[]); s.kita=arr4(d.kt,D);
-  s.len=d.ln===2?2:1; s.aka=[0,1,2,3].includes(d.ak)?d.ak:0; s.akaIds=akaIdsFor(s.n,s.aka);
-  for(const t of [...s.hands.flat(),...s.discards.flat(),...s.kita.flat(),...s.melds.flat().flatMap(m=>m.tiles),...s.doraInd,...s.uraInd])if(s.akaIds.includes(t.id))t.r=true;
+  s.len=d.ln===2?2:1; s.glass=d.gl!==false; s.aka=[0,1,2,3].includes(d.ak)?d.ak:0; s.akaIds=akaIdsFor(s.n,s.aka);
+  for(const t of [...s.hands.flat(),...s.discards.flat(),...s.kita.flat(),...s.melds.flat().flatMap(m=>m.tiles),...s.doraInd,...s.uraInd]){if(s.akaIds.includes(t.id))t.r=true;if(!s.glass)t.g=false;}
   s.turn=clampSeat(d.tn); s.lastDiscard=d.ld==null?null:num(d.ld); s.rinshan=!!d.rs; s.msg=String(d.msg||'');
   s.awaiting=d.aw&&typeof d.aw==='object'?sanitizeAw(d.aw):null; s.result=d.rl&&typeof d.rl==='object'?d.rl:null;
   s.names=arr4(d.nm,x=>x==null?null:cleanNick(x)); s.humans=arr4(d.hm,x=>typeof x==='string'?x:null);
@@ -981,7 +981,7 @@ function broadcastNow(){
 function queueBroadcast(){if(NET.mode!=='host')return;clearTimeout(NET.bcTimer);NET.bcTimer=setTimeout(broadcastNow,40);}
 function advertise(){
   if(NET.mode!=='host'||!NET.api)return;
-  const ad={code:NET.code,nick:NET.nick,n:S.humans.filter(Boolean).length,N:NP(),L:S.len===2?2:1,st:S.phase!=='lobby'};
+  const ad={code:NET.code,nick:NET.nick,n:S.humans.filter(Boolean).length,N:NP(),L:S.len===2?2:1,G:S.glass!==false,st:S.phase!=='lobby'};
   const key=JSON.stringify(ad); if(key===NET.lastAd)return; NET.lastAd=key;
   NET.api.presence({hosting:ad}).catch(()=>{});
 }
@@ -995,7 +995,7 @@ async function hostTable(resume,n=4){
     S=saved.S; NET.code=saved.code; S.humans[0]=NET.cid;
   }else{
     lsSet('glass-nick',NET.nick);
-    NET.code=randCode(); S=blankState('lobby',n===3?3:4); S.aka=UI.aka; S.len=UI.len; S.humans=[NET.cid,null,null,null]; S.names=[NET.nick||'ホスト',null,null,null];
+    NET.code=randCode(); S=blankState('lobby',n===3?3:4); S.aka=UI.aka; S.len=UI.len; S.glass=UI.glass; S.humans=[NET.cid,null,null,null]; S.names=[NET.nick||'ホスト',null,null,null];
   }
   NET.mode='host'; NET.ep=Date.now(); NET.seq=0; ME=0; SPECT=false; NET.err=''; NET.lastAd='';
   try{NET.tr=await api.join('t-'+NET.code);}catch(e){NET.mode='solo';NET.err='卓を作れませんでした。時間をおいてもう一度お試しください。';S=blankState('netmenu');render();return;}
@@ -1038,12 +1038,12 @@ function startNet(){
   if(NET.mode!=='host'||S.phase!=='lobby')return;
   let c=0; const N=NP(); const names=S.names.map((n,i)=>i>=N?null:S.humans[i]?n:'CPU'+(++c));
   const humans=S.humans.slice();
-  initGame(names,humans,N,S.aka,S.len); advertise();
+  initGame(names,humans,N,S.aka,S.len,S.glass); advertise();
 }
 function againNet(){
   if(NET.mode!=='host')return;
   const humans=S.humans.slice(),names=S.names.map((n,i)=>humans[i]?n:null);
-  const ak=S.aka,ln=S.len; clearTimeout(timer); S=blankState('lobby',NP()); S.aka=ak; S.len=ln; S.humans=humans; S.names=names; render(); advertise();
+  const ak=S.aka,ln=S.len,gl=S.glass; clearTimeout(timer); S=blankState('lobby',NP()); S.aka=ak; S.len=ln; S.glass=gl; S.humans=humans; S.names=names; render(); advertise();
 }
 
 /* ---------- rendering ---------- */
@@ -1143,7 +1143,7 @@ function render(){
   const aw=myAw();
   $('msg').innerHTML=inGame?richMsg(aw&&aw.hint?aw.hint:S.msg):'';
   $('actions').innerHTML=S.phase==='play'?actionsHTML():'';
-  $('viewBtn').setAttribute('aria-pressed',UI.view); $('assistBtn').setAttribute('aria-pressed',UI.assist);
+  $('viewBtn').hidden=S.glass===false&&inGame; $('viewBtn').setAttribute('aria-pressed',UI.view); $('assistBtn').setAttribute('aria-pressed',UI.assist);
   const nb=$('netBadge');
   if(NET.mode==='solo'||!NET.code){nb.hidden=true;}
   else{nb.hidden=false;nb.textContent=`卓 ${NET.code}${NET.mode==='host'?'（ホスト）':''} · ${NET.conn?'接続中':'再接続中…'}`;nb.classList.toggle('off',!NET.conn);}
@@ -1165,6 +1165,8 @@ function rulesHTML(){
   <div class="legend"><span>${tileEl({k:4,g:true})} 硝子牌（他家から見える）</span><span>${tileEl({k:4,g:false})} 不透明牌（見えない）</span><span>${backEl()} 他家の不透明牌</span></div>
   <h3>対局</h3>
   <ul><li>4人打ち、持ち点25,000点。東風戦（4局）か半荘戦（東場＋南場の8局）を選べます。南場では南が場風になります。ひとりならCPU3人と、友達と対局なら空席にCPUが入ります。</li><li>ポン・チー・カン（明槓・暗槓・加槓）あり。喰いタン・後付けあり、喰い替えなし。カンドラは即乗り、嶺上開花・槍槓あり。</li><li>手牌は種類順に並ぶので、伏せ牌の<b>位置</b>からも中身を推理できます。鳴くときは透明な牌から晒し、不透明牌は手の内に残ります。</li><li>CPUもあなたの硝子牌を見て、危険牌を避けたり残り枚数を数えたりします。</li></ul>
+  <h3>通常麻雀</h3>
+  <ul><li>タイトル画面（友達と対局ではロビー）の「牌」で<b>通常</b>を選ぶと、すべての牌が不透明のふつうの麻雀になります。ほかの設定はそのまま使えます。</li></ul>
   <h3>三人打ち</h3>
   <ul><li>萬子の二〜八を抜いた108枚。チーなし。持ち点35,000点。東風戦3局／半荘戦6局。</li><li>北は<b>北抜き</b>で抜きドラに（1枚1翻、嶺上牌を補充）。リーチ中に引いた北は自動で抜きます。</li><li>抜いた北でロン和了できます（槍槓は付きません）。</li><li>ツモ損なしの<b>折半</b>：子のツモは北家の分を親子で半分ずつ負担（例：満貫8,000は親5,000・子3,000）。親のツモは子が満貫なら6,000ずつ。</li><li>ドラ表示が一萬なら九萬、九萬なら一萬がドラ。ノーテン罰符は2,000点。</li></ul>
   <h3>赤ドラ</h3>
@@ -1177,7 +1179,7 @@ function rulesHTML(){
 function tableListHTML(){
   if(!NET.api)return '<span class="hint">通信の準備中…</span>';
   if(!NET.tables.length)return '<span class="hint">今は開いている卓がありません。</span>';
-  return NET.tables.map(t=>`<div class="trow"><span class="code">${esc(t.code)}</span><span class="who">${esc(t.nick)}の卓 · ${t.N===3?'三麻':'四麻'}${t.L===2?'半荘':'東風'} ${t.n}/${t.N}人${t.st?' · 対局中':''}</span><button class="btn" data-o="joinT" data-code="${esc(t.code)}">${t.st?'入る':'参加'}</button></div>`).join('');
+  return NET.tables.map(t=>`<div class="trow"><span class="code">${esc(t.code)}</span><span class="who">${esc(t.nick)}の卓 · ${t.N===3?'三麻':'四麻'}${t.L===2?'半荘':'東風'}${t.G?'':'・通常牌'} ${t.n}/${t.N}人${t.st?' · 対局中':''}</span><button class="btn" data-o="joinT" data-code="${esc(t.code)}">${t.st?'入る':'参加'}</button></div>`).join('');
 }
 function updateTableList(){const e=$('tlist');if(e)e.innerHTML=tableListHTML();}
 function setMode(n){
@@ -1199,8 +1201,9 @@ function renderOverlay(){
     const g=lsGet('glass-guest'); if(g&&/^[a-z0-9]{4}$/.test(g))resume+=`<button class="btn" data-o="rejoin">卓 ${esc(g)} に戻る</button>`;
     const btns=`<div class="actions"><button class="btn primary" data-o="solo">ひとりで四麻</button><button class="btn primary" data-o="solo3">ひとりで三麻</button><button class="btn primary" data-o="net">友達と対局</button>${resume}</div>`;
     const akaRow=`<div class="field"><label>赤ドラ</label><div class="actions">${[0,1,2,3].map(l=>`<button class="ghost" data-o="aka${l}" aria-pressed="${UI.aka===l}">${AKA_LABEL[l]}</button>`).join('')}<span class="hint">${UI.aka?`四麻${akaIdsFor(4,UI.aka).length}枚・三麻${akaIdsFor(3,UI.aka).length}枚`:'赤ドラなし'}</span></div></div>`;
+    const glassRow=`<div class="field"><label>牌</label><div class="actions"><button class="ghost" data-o="glass1" aria-pressed="${UI.glass}">硝子牌</button><button class="ghost" data-o="glass0" aria-pressed="${!UI.glass}">通常</button><span class="hint">${UI.glass?'4枚中3枚が透明':'すべて不透明（ふつうの麻雀）'}</span></div></div>`;
     const lenRow=`<div class="field"><label>対局の長さ</label><div class="actions">${[1,2].map(l=>`<button class="ghost" data-o="len${l}" aria-pressed="${UI.len===l}">${LEN_LABEL[l]}</button>`).join('')}<span class="hint">${UI.len===2?'東場＋南場（四麻8局・三麻6局）':'東場のみ（四麻4局・三麻3局）'}</span></div></div>`;
-    html=`<h2>硝子牌麻雀<small>Glass Tile Mahjong</small></h2>${btns}${lenRow}${akaRow}${rulesHTML()}${btns}`;
+    html=`<h2>硝子牌麻雀<small>Glass Tile Mahjong</small></h2>${btns}${glassRow}${lenRow}${akaRow}${rulesHTML()}${btns}`;
   }
   else if(S.phase==='netmenu'){
     key='netmenu';
@@ -1219,7 +1222,7 @@ function renderOverlay(){
     const host=NET.mode==='host',seated=S.humans.includes(NET.cid);
     html=`<h2>卓<small>コード</small> <span class="bigcode">${esc(NET.code)}</span></h2>
     <p class="lead">${host?'友達に卓コードを伝えるか、「友達と対局」の一覧から参加してもらってください。空いた席にはCPUが入ります。':seated?'ホストが対局を始めるのを待っています。':'満席のため観戦になります。'}</p>
-    ${host?`<div class="actions"><button class="ghost" data-o="mode4" aria-pressed="${NP()===4}">四人打ち</button><button class="ghost" data-o="mode3" aria-pressed="${NP()===3}">三人打ち</button></div><div class="actions"><span class="hint">長さ</span>${[1,2].map(l=>`<button class="ghost" data-o="len${l}" aria-pressed="${S.len===l}">${LEN_LABEL[l]}</button>`).join('')}</div><div class="actions"><span class="hint">赤ドラ</span>${[0,1,2,3].map(l=>`<button class="ghost" data-o="aka${l}" aria-pressed="${S.aka===l}">${AKA_LABEL[l]}</button>`).join('')}<span class="hint">${akaDesc(NP(),S.aka)}</span></div>`:`<p class="lead">${NP()===3?'三人打ち':'四人打ち'} · ${LEN_LABEL[S.len===2?2:1]} · 赤ドラ ${akaDesc(NP(),S.aka)}</p>`}${seatsHTML()}${err}
+    ${host?`<div class="actions"><button class="ghost" data-o="mode4" aria-pressed="${NP()===4}">四人打ち</button><button class="ghost" data-o="mode3" aria-pressed="${NP()===3}">三人打ち</button></div><div class="actions"><span class="hint">牌</span><button class="ghost" data-o="glass1" aria-pressed="${S.glass!==false}">硝子牌</button><button class="ghost" data-o="glass0" aria-pressed="${S.glass===false}">通常</button></div><div class="actions"><span class="hint">長さ</span>${[1,2].map(l=>`<button class="ghost" data-o="len${l}" aria-pressed="${S.len===l}">${LEN_LABEL[l]}</button>`).join('')}</div><div class="actions"><span class="hint">赤ドラ</span>${[0,1,2,3].map(l=>`<button class="ghost" data-o="aka${l}" aria-pressed="${S.aka===l}">${AKA_LABEL[l]}</button>`).join('')}<span class="hint">${akaDesc(NP(),S.aka)}</span></div>`:`<p class="lead">${NP()===3?'三人打ち':'四人打ち'} · ${S.glass===false?'通常牌':'硝子牌'} · ${LEN_LABEL[S.len===2?2:1]} · 赤ドラ ${akaDesc(NP(),S.aka)}</p>`}${seatsHTML()}${err}
     <div class="actions">${host?'<button class="btn primary" data-o="startNet">対局開始</button><button class="btn" data-o="leaveNet">卓を閉じる</button>':'<button class="btn" data-o="leaveNet">退出</button>'}</div>`;
   }
   else if(S.phase==='result'&&S.result){
@@ -1270,6 +1273,7 @@ $('panel').addEventListener('click',e=>{
   else if(o==='solo'){UI.help=false;newSolo(4);}
   else if(o==='solo3'){UI.help=false;newSolo(3);}
   else if(o==='mode3'||o==='mode4'){setMode(o==='mode3'?3:4);}
+  else if(o==='glass1'||o==='glass0'){UI.glass=o==='glass1';saveUI();if(NET.mode==='host'&&S.phase==='lobby')S.glass=UI.glass;render();}
   else if(o==='len1'||o==='len2'){UI.len=+o[3];saveUI();if(NET.mode==='host'&&S.phase==='lobby')S.len=UI.len;render();}
   else if(/^aka[0-3]$/.test(o)){const l=+o[3];UI.aka=l;saveUI();if(NET.mode==='host'&&S.phase==='lobby'){S.aka=l;}render();}
   else if(o==='net'){NET.err='';S=blankState('netmenu');render();netReady().then(()=>{if(S.phase==='netmenu'){const ni=$('nickIn');if(ni&&!ni.value&&NET.nick)ni.value=NET.nick;updateTableList();}});}
