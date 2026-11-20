@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>硝子牌麻雀</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one-screen table, opponent on top, you at the bottom, info rail between. Single deliberate dark look (night table). */
+:root{
+  --table:#0E1922; --table-hi:#16293A; --line:rgba(205,167,94,.22);
+  --text:#ECE6D6; --muted:#93A3AF; --brass:#CDA75E; --brass-hi:#E6C27A;
+  --blood:#7C1F29; --blood-dk:#4A1118;
+  --ivory:#F6F0E0; --ivory-dk:#C8BC9C;
+  --ink:#1B2529; --t-red:#B32A31; --t-green:#1D7047; --t-blue:#244F8E;
+  --f-display:"Shippori Mincho B1","Hiragino Mincho ProN","Yu Mincho",serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,monospace;
+  --tw:clamp(20px, calc((min(100vw, 760px) - 64px) / 14.8), 46px);
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0}
+body{background:radial-gradient(120% 80% at 50% 45%, var(--table-hi), var(--table) 70%); background-color:var(--table); color:var(--text); font-family:var(--f-body); font-size:14px; overflow-x:hidden}
+#app{height:100%; max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:8px; padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px)); padding-block:10px; box-sizing:border-box}
+button{font-family:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--brass-hi); outline-offset:2px}
+
+.bar{display:flex; align-items:center; gap:10px 14px; flex-wrap:wrap; border-bottom:1px solid var(--line); padding-bottom:8px}
+.brand{font-family:var(--f-display); font-weight:800; font-size:18px; letter-spacing:.12em; color:var(--brass)}
+.chip{display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:12px}
+.chip b{color:var(--text); font-family:var(--f-num); font-weight:500; font-variant-numeric:tabular-nums}
+.chip .tile{--w:calc(var(--tw)*.62)}
+.bar .spacer{flex:1}
+.ghost{background:none; border:1px solid var(--line); border-radius:999px; padding:4px 12px; font-size:12px; color:var(--muted); cursor:pointer}
+.ghost:hover{color:var(--text); border-color:var(--brass)}
+.ghost[aria-pressed="true"]{color:var(--table); background:var(--brass); border-color:var(--brass)}
+
+.seat{display:flex; flex-direction:column; gap:6px}
+.who{display:flex; align-items:center; gap:10px; flex-wrap:wrap; min-height:24px}
+.who .name{font-family:var(--f-display); font-weight:800; font-size:15px; letter-spacing:.06em}
+.wind{font-family:var(--f-display); font-size:12px; border:1px solid var(--brass); color:var(--brass); border-radius:4px; padding:0 5px}
+.wind.dealer{background:var(--brass); color:var(--table)}
+.score{font-family:var(--f-num); font-variant-numeric:tabular-nums; font-size:15px}
+.flag{font-size:11px; letter-spacing:.1em; padding:1px 8px; border-radius:999px; background:var(--blood); color:#FBE3DF}
+.flag.furi{background:#3A4752; color:var(--text)}
+.status{color:var(--muted); font-size:12px; margin-left:auto}
+.status b{color:var(--brass-hi); font-weight:700}
+
+.hand{display:flex; align-items:flex-end; gap:2px; min-height:calc(var(--tw)*1.36 + 10px); padding-top:8px}
+.hand .gap{width:calc(var(--tw)*.35); flex:none}
+.river{display:flex; flex-wrap:wrap; gap:2px; align-content:flex-start; min-height:calc(var(--tw)*.66*1.36*2 + 4px)}
+.river .tile{--w:calc(var(--tw)*.66)}
+
+.center{flex:1 1 auto; max-height:160px; display:flex; align-items:center; justify-content:center; gap:12px; min-height:34px; border-block:1px solid var(--line); padding-block:6px; text-align:center}
+#msg{font-size:13px; text-wrap:balance}
+#msg em{font-style:normal; color:var(--brass-hi); font-weight:700}
+
+.actions{display:flex; gap:8px; flex-wrap:wrap; min-height:40px; align-items:center}
+.btn{border:1px solid var(--brass); background:none; color:var(--brass-hi); border-radius:8px; padding:8px 18px; font-size:15px; font-weight:700; letter-spacing:.08em; cursor:pointer; font-family:var(--f-display)}
+.btn:hover{background:rgba(205,167,94,.12)}
+.btn.primary{background:var(--brass); color:#1A1306}
+.btn.primary:hover{background:var(--brass-hi)}
+.btn.red{background:var(--blood); border-color:#B4434E; color:#FFE8E4}
+.hint{color:var(--muted); font-size:12px}
+
+/* tiles */
+.tile{--w:var(--tw); width:var(--w); height:calc(var(--w)*1.36); border-radius:calc(var(--w)*.14); position:relative; flex:none; padding:0; border:0; display:block; transition:transform .12s ease}
+.tile svg{width:100%; height:100%; display:block; position:relative; z-index:1}
+.tile.solid{background:linear-gradient(#FFFBF0,#ECE3CB); box-shadow:0 calc(var(--w)*.08) 0 var(--ivory-dk), 0 calc(var(--w)*.12) calc(var(--w)*.2) rgba(0,0,0,.5)}
+.tile.glass{background:linear-gradient(160deg, rgba(232,250,255,.82), rgba(160,208,224,.52) 55%, rgba(206,238,248,.7)); box-shadow:inset 0 0 0 1px rgba(255,255,255,.75), inset 0 0 calc(var(--w)*.25) rgba(255,255,255,.4), 0 calc(var(--w)*.08) 0 rgba(110,170,192,.6), 0 calc(var(--w)*.12) calc(var(--w)*.22) rgba(0,0,0,.4)}
+.tile.glass::after{content:""; position:absolute; inset:0; border-radius:inherit; background:linear-gradient(118deg, transparent 30%, rgba(255,255,255,.38) 36%, transparent 42%, transparent 64%, rgba(255,255,255,.18) 67%, transparent 70%); z-index:2; pointer-events:none}
+.tile.back{background:linear-gradient(#93303A,var(--blood) 45%,var(--blood-dk)); box-shadow:inset 0 0 0 calc(var(--w)*.06) rgba(255,215,200,.14), 0 calc(var(--w)*.08) 0 #340A10, 0 calc(var(--w)*.12) calc(var(--w)*.2) rgba(0,0,0,.5)}
+.tile.back::after{content:""; position:absolute; inset:22% 26%; border:1px solid rgba(255,215,200,.22); border-radius:50%}
+.tile.peek{opacity:.35}
+.hand button.tile{cursor:pointer}
+.hand button.tile:disabled{cursor:default}
+.hand button.tile.sel{transform:translateY(-22%)}
+@media (hover:hover){ .hand button.tile.can:hover{transform:translateY(-14%)} }
+.tile.dim{filter:grayscale(.6) brightness(.55)}
+.tile.rec::before{content:""; position:absolute; top:calc(var(--w)*-.28); left:50%; width:5px; height:5px; margin-left:-2.5px; border-radius:50%; background:var(--brass-hi); z-index:3}
+.tile.last{outline:2px solid var(--brass-hi); outline-offset:1px}
+.tile.rii{transform:rotate(-90deg) translateX(-10%); margin-inline:calc(var(--w)*.18)}
+.tile.win{outline:2px solid #E5534B; outline-offset:2px}
+.tm{font-family:var(--f-display); font-weight:800; fill:var(--ink)}
+.tr{font-family:var(--f-display); font-weight:800; fill:var(--t-red)}
+.th{font-family:var(--f-display); font-weight:800}
+
+/* overlay */
+.overlay{position:fixed; inset:0; background:rgba(5,10,14,.72); display:flex; align-items:center; justify-content:center; z-index:20; padding:max(16px, env(safe-area-inset-top,0px)) max(16px, env(safe-area-inset-right,0px)) max(16px, env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px)); box-sizing:border-box}
+.panel{background:linear-gradient(#18293A,#101D28); border:1px solid var(--line); border-radius:14px; width:min(620px,100%); max-height:100%; overflow:auto; padding:22px; box-sizing:border-box; display:flex; flex-direction:column; gap:14px; box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.panel h2{font-family:var(--f-display); font-weight:800; font-size:30px; letter-spacing:.14em; margin:0; color:var(--brass); text-wrap:balance}
+.panel h2 small{font-size:14px; color:var(--muted); letter-spacing:.04em; margin-left:10px}
+.panel p{margin:0; line-height:1.75; color:var(--text); max-width:62ch}
+.panel .lead{color:var(--muted)}
+.rowtiles{display:flex; flex-wrap:wrap; gap:2px; align-items:flex-end}
+.rowtiles .tile{--w:clamp(18px, 6vw, 34px)}
+.rowtiles .gap{width:10px}
+.yaku{display:grid; grid-template-columns:1fr auto; gap:4px 18px; font-size:14px}
+.yaku span:nth-child(even){font-family:var(--f-num); color:var(--brass-hi); text-align:right}
+.total{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; border-top:1px solid var(--line); padding-top:10px}
+.total .big{font-family:var(--f-num); font-size:26px; color:var(--brass-hi); font-variant-numeric:tabular-nums}
+.scores{display:grid; grid-template-columns:auto 1fr auto; gap:4px 14px; font-family:var(--f-num); font-variant-numeric:tabular-nums}
+.scores .up{color:#7FC79A} .scores .down{color:#E5847C}
+.rules{display:grid; gap:10px}
+.rules h3{font-family:var(--f-display); font-size:16px; margin:6px 0 0; color:var(--brass)}
+.rules ul{margin:0; padding-left:1.2em; line-height:1.75}
+.legend{display:flex; gap:16px; flex-wrap:wrap; align-items:center; color:var(--muted); font-size:12px}
+.legend span{display:inline-flex; gap:6px; align-items:center}
+.legend .tile{--w:22px}
+@media (max-width:420px){ .panel{padding:16px} .panel h2{font-size:24px} .btn{padding:8px 14px} }
+@media (prefers-reduced-motion:reduce){ .tile{transition:none} }
+</style>
+
+<div id="app">
+  <header class="bar">
+    <div class="brand">硝子牌麻雀</div>
+    <span class="chip"><b id="roundLabel">東1局</b><span id="honbaLabel"></span></span>
+    <span class="chip">ドラ表示 <span id="doraInd"></span></span>
+    <span class="chip">残り <b id="wallCount">0</b></span>
+    <span class="chip">供託 <b id="potLabel">0</b></span>
+    <span class="spacer"></span>
+    <button class="ghost" id="viewBtn" aria-pressed="false" title="CPUから見えている自分の手牌">CPU視点</button>
+    <button class="ghost" id="assistBtn" aria-pressed="true">アシスト</button>
+    <button class="ghost" id="helpBtn">ルール</button>
+  </header>
+
+  <section class="seat">
+    <div class="who"><span class="name">CPU</span><span class="wind" id="cpuWind">南</span><span class="score" id="cpuScore">25000</span><span class="flag" id="cpuRiichi" hidden>リーチ</span></div>
+    <div class="hand" id="cpuHand"></div>
+    <div class="river" id="cpuRiver"></div>
+  </section>
+
+  <div class="center"><div id="msg"></div></div>
+
+  <section class="seat">
+    <div class="river" id="myRiver"></div>
+    <div class="hand" id="myHand"></div>
+    <div class="who"><span class="name">あなた</span><span class="wind" id="myWind">東</span><span class="score" id="myScore">25000</span><span class="flag" id="myRiichi" hidden>リーチ</span><span class="flag furi" id="myFuri" hidden>フリテン</span><span class="status" id="myStatus"></span></div>
+    <div class="actions" id="actions"></div>
+  </section>
+</div>
+
+<div class="overlay" id="overlay" hidden><div class="panel" id="panel" role="dialog" aria-modal="true"></div></div>
+
+<script>
+/*LOGIC-START*/
+const KNUM=['一','二','三','四','五','六','七','八','九'];
+const HONOR=['東','南','西','北','白','發','中'];
+const GREEN=[19,20,21,23,25,32];
+const LIVE_WALL=40;
+const isHonor=k=>k>=27;
+const isTerm=k=>k<27&&(k%9===0||k%9===8);
+const isYao=k=>isHonor(k)||isTerm(k);
+const suitOf=k=>k<27?Math.floor(k/9):3;
+function tileName(k){return k<27?KNUM[k%9]+['萬','筒','索'][suitOf(k)]:HONOR[k-27];}
+function doraFrom(i){if(i<27)return suitOf(i)*9+(i%9+1)%9; if(i<31)return 27+(i-27+1)%4; return 31+(i-31+1)%3;}
+function makeTiles(){const a=[];for(let k=0;k<34;k++)for(let c=0;c<4;c++)a.push({id:k*4+c,k,g:c<3});return a;}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function counts(tiles){const c=new Array(34).fill(0);for(const t of tiles)c[t.k]++;return c;}
+
+function shantenNormal(c){
+  let best=8; const cc=c.slice();
+  function rec(i,m,t,p){
+    while(i<34&&cc[i]===0)i++;
+    if(i>=34){const s=8-2*m-Math.min(t,4-m)-p; if(s<best)best=s; return;}
+    if(cc[i]>=3){cc[i]-=3;rec(i,m+1,t,p);cc[i]+=3;}
+    if(i<27&&i%9<=6&&cc[i+1]&&cc[i+2]){cc[i]--;cc[i+1]--;cc[i+2]--;rec(i,m+1,t,p);cc[i]++;cc[i+1]++;cc[i+2]++;}
+    if(cc[i]>=2){cc[i]-=2;if(!p)rec(i,m,t,1);if(m+t<4)rec(i,m,t+1,p);cc[i]+=2;}
+    if(m+t<4){
+      if(i<27&&i%9<=7&&cc[i+1]){cc[i]--;cc[i+1]--;rec(i,m,t+1,p);cc[i]++;cc[i+1]++;}
+      if(i<27&&i%9<=6&&cc[i+2]){cc[i]--;cc[i+2]--;rec(i,m,t+1,p);cc[i]++;cc[i+2]++;}
+    }
+    const n=cc[i]; cc[i]=0; rec(i+1,m,t,p); cc[i]=n;
+  }
+  rec(0,0,0,0); return best;
+}
+function shantenChiitoi(c){let p=0,k=0;for(const v of c){if(v>=2)p++;if(v>=1)k++;}return 6-p+Math.max(0,7-k);}
+function shantenKokushi(c){let k=0,pair=0;for(let i=0;i<34;i++)if(isYao(i)&&c[i]){k++;if(c[i]>=2)pair=1;}return 13-k-pair;}
+function shanten(c){return Math.min(shantenNormal(c),shantenChiitoi(c),shantenKokushi(c));}
+function waitsOf(c){const w=[];for(let k=0;k<34;k++){if(c[k]>=4)continue;c[k]++;if(shanten(c)===-1)w.push(k);c[k]--;}return w;}
+
+function decompose(c){
+  const res=[],cc=c.slice();
+  for(let p=0;p<34;p++){
+    if(cc[p]<2)continue; cc[p]-=2; const melds=[];
+    (function rec(i){
+      while(i<34&&cc[i]===0)i++;
+      if(i>=34){res.push({pair:p,melds:melds.slice()});return;}
+      if(cc[i]>=3){cc[i]-=3;melds.push({t:'pon',k:i});rec(i);melds.pop();cc[i]+=3;}
+      if(i<27&&i%9<=6&&cc[i+1]&&cc[i+2]){cc[i]--;cc[i+1]--;cc[i+2]--;melds.push({t:'chi',k:i});rec(i);melds.pop();cc[i]++;cc[i+1]++;cc[i+2]++;}
+    })(0);
+    cc[p]+=2;
+  }
+  return res;
+}
+function isKokushi(c){let s=0;for(let i=0;i<34;i++){if(isYao(i)){if(!c[i])return false;s+=c[i];}else if(c[i])return false;}return s===14;}
+function isChiitoi(c){let n=0;for(const v of c){if(v===2)n++;else if(v)return false;}return n===7;}
+
+function limitOf(han,fu){
+  if(han>=13)return[8000,'数え役満']; if(han>=11)return[6000,'三倍満']; if(han>=8)return[4000,'倍満']; if(han>=6)return[3000,'跳満'];
+  const b=fu*Math.pow(2,han+2); if(han>=5||b>=2000)return[2000,'満貫']; return[b,''];
+}
+/* c: 14-tile counts incl. win tile. ctx: tsumo, riichi, ippatsu, last, seat, round, dora[], ura[] */
+function evaluate(c,win,ctx){
+  const kinds=[];for(let k=0;k<34;k++)if(c[k])kinds.push(k);
+  const hasHonor=kinds.some(isHonor);
+  const suits=new Set(kinds.filter(k=>k<27).map(suitOf));
+  const common=[];
+  if(ctx.riichi)common.push(['立直',1]);
+  if(ctx.ippatsu)common.push(['一発',1]);
+  if(ctx.tsumo)common.push(['門前清自摸和',1]);
+  if(ctx.last)common.push([ctx.tsumo?'海底摸月':'河底撈魚',1]);
+  const shape={
+    noYao:kinds.every(k=>!isYao(k)), allYao:kinds.every(isYao), hasHonor,
+    flush:suits.size===1?(hasHonor?['混一色',3]:['清一色',6]):null, common, commonYm:[]
+  };
+  if(kinds.every(isHonor))shape.commonYm.push(['字一色',1]);
+  if(kinds.every(k=>GREEN.includes(k)))shape.commonYm.push(['緑一色',1]);
+  if(kinds.every(isTerm))shape.commonYm.push(['清老頭',1]);
+  if(suits.size===1&&!hasHonor){const s=[...suits][0]*9;if([3,1,1,1,1,1,1,1,3].every((v,i)=>c[s+i]>=v))shape.commonYm.push(['九蓮宝燈',1]);}
+  const forms=[];
+  if(isKokushi(c))forms.push({ym:[['国士無双',1]],yaku:[],fu:0});
+  if(isChiitoi(c)){
+    const y=[...common,['七対子',2]];
+    if(shape.noYao)y.push(['断幺九',1]); if(shape.allYao)y.push(['混老頭',2]); if(shape.flush)y.push(shape.flush);
+    forms.push({ym:shape.commonYm.slice(),yaku:y,fu:25});
+  }
+  for(const d of decompose(c)){
+    const pls=[];
+    if(d.pair===win)pls.push({wait:'tanki',meld:-1});
+    d.melds.forEach((m,i)=>{
+      if(m.t==='pon'&&m.k===win)pls.push({wait:'shanpon',meld:i});
+      if(m.t==='chi'&&win>=m.k&&win<=m.k+2){
+        const pos=win-m.k,n=m.k%9;
+        pls.push({wait:pos===1?'kanchan':(pos===0&&n===6)||(pos===2&&n===0)?'penchan':'ryanmen',meld:i});
+      }
+    });
+    for(const pl of pls)forms.push(normalForm(d,pl,ctx,shape));
+  }
+  let best=null;
+  for(const f of forms){
+    let r;
+    if(f.ym.length){
+      const n=f.ym.reduce((a,y)=>a+y[1],0);
+      r={yaku:f.ym.map(y=>[y[0],'役満']),han:13*n,fu:f.fu,base:8000*n,label:n>1?n+'倍役満':'役満',yakuman:true};
+    }else{
+      const yh=f.yaku.reduce((a,y)=>a+y[1],0); if(!yh)continue;
+      const yaku=f.yaku.slice();
+      let dora=0;for(const d of ctx.dora)dora+=c[d];
+      if(dora)yaku.push(['ドラ',dora]);
+      let ura=0;if(ctx.riichi)for(const d of ctx.ura)ura+=c[d];
+      if(ura)yaku.push(['裏ドラ',ura]);
+      const han=yh+dora+ura; const [base,label]=limitOf(han,f.fu);
+      r={yaku,han,fu:f.fu,base,label,yakuman:false};
+    }
+    if(!best||r.base>best.base||(r.base===best.base&&r.han>best.han))best=r;
+  }
+  return best;
+}
+function normalForm(d,pl,ctx,shape){
+  const pons=d.melds.filter(m=>m.t==='pon').map(m=>m.k);
+  const chis=d.melds.filter(m=>m.t==='chi').map(m=>m.k);
+  const ronPon=!ctx.tsumo&&pl.wait==='shanpon';
+  const anko=pons.length-(ronPon?1:0);
+  const ym=shape.commonYm.slice();
+  if(anko===4)ym.push(['四暗刻',1]);
+  const dragonP=pons.filter(k=>k>=31).length;
+  if(dragonP===3)ym.push(['大三元',1]);
+  const windP=pons.filter(k=>k>=27&&k<=30).length;
+  if(windP===4)ym.push(['大四喜',1]); else if(windP===3&&d.pair>=27&&d.pair<=30)ym.push(['小四喜',1]);
+  const yaku=shape.common.slice();
+  if(shape.noYao)yaku.push(['断幺九',1]);
+  const pairYakuhai=d.pair>=31||d.pair===ctx.seat||d.pair===ctx.round;
+  const pinfu=chis.length===4&&!pairYakuhai&&pl.wait==='ryanmen';
+  if(pinfu)yaku.push(['平和',1]);
+  const cnt={};chis.forEach(k=>cnt[k]=(cnt[k]||0)+1);
+  const pk=Object.values(cnt).reduce((a,v)=>a+Math.floor(v/2),0);
+  if(pk===2)yaku.push(['二盃口',3]); else if(pk===1)yaku.push(['一盃口',1]);
+  for(const k of pons){
+    if(k>=31)yaku.push(['役牌 '+HONOR[k-27],1]);
+    if(k===ctx.seat)yaku.push(['自風 '+HONOR[k-27],1]);
+    if(k===ctx.round)yaku.push(['場風 '+HONOR[k-27],1]);
+  }
+  for(let n=0;n<7;n++)if(chis.includes(n)&&chis.includes(n+9)&&chis.includes(n+18)){yaku.push(['三色同順',2]);break;}
+  for(let s=0;s<3;s++)if([0,3,6].every(o=>chis.includes(s*9+o))){yaku.push(['一気通貫',2]);break;}
+  const allGroupsYao=chis.every(k=>k%9===0||k%9===6)&&pons.every(isYao)&&isYao(d.pair);
+  if(allGroupsYao&&chis.length)yaku.push(shape.hasHonor?['混全帯幺九',2]:['純全帯幺九',3]);
+  if(pons.length===4)yaku.push(['対々和',2]);
+  if(anko===3)yaku.push(['三暗刻',2]);
+  if(shape.allYao&&!chis.length)yaku.push(['混老頭',2]);
+  if(dragonP===2&&d.pair>=31)yaku.push(['小三元',2]);
+  if(shape.flush)yaku.push(shape.flush);
+  let fu;
+  if(pinfu)fu=ctx.tsumo?20:30;
+  else{
+    fu=20+(ctx.tsumo?2:10);
+    if(d.pair>=31)fu+=2; if(d.pair===ctx.seat)fu+=2; if(d.pair===ctx.round)fu+=2;
+    d.melds.forEach((m,i)=>{if(m.t!=='pon')return;let f=isYao(m.k)?8:4;if(ronPon&&i===pl.meld)f/=2;fu+=f;});
+    if(pl.wait==='kanchan'||pl.wait==='penchan'||pl.wait==='tanki')fu+=2;
+    fu=Math.ceil(fu/10)*10;
+  }
+  return{ym,yaku,fu};
+}
+const ceil100=x=>Math.ceil(x/100)*100;
+/*LOGIC-END*/
+
+/* ---------- tile faces ---------- */
+const FACE={};
+function pin(cx,cy,r,col){return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="${r*.28}"/><circle cx="${cx}" cy="${cy}" r="${r*.42}" fill="${col}"/>`;}
+function stick(cx,cy,h,col){return `<rect x="${cx-3.6}" y="${cy-h/2}" width="7.2" height="${h}" rx="3.6" fill="${col}"/><line x1="${cx-3.6}" x2="${cx+3.6}" y1="${cy}" y2="${cy}" stroke="#F6F0E0" stroke-width="1.4"/>`;}
+function faceSVG(k){
+  if(FACE[k])return FACE[k];
+  const s=suitOf(k),n=k%9+1; let g='';
+  const R='var(--t-red)',G='var(--t-green)',B='var(--t-blue)';
+  if(s===0){g=`<text x="30" y="35" font-size="27" text-anchor="middle" class="tm">${KNUM[n-1]}</text><text x="30" y="70" font-size="27" text-anchor="middle" class="tr">萬</text>`;}
+  else if(s===1){
+    const L={1:[[30,40,17,R]],2:[[30,22,11,G],[30,58,11,B]],3:[[15,17,9,B],[30,40,9,R],[45,63,9,G]],
+      4:[[18,22,10,B],[42,22,10,G],[18,58,10,G],[42,58,10,B]],5:[[17,19,9,B],[43,19,9,G],[30,40,9,R],[17,61,9,G],[43,61,9,B]],
+      6:[[19,15,8,G],[41,15,8,G],[19,42,8,R],[41,42,8,R],[19,65,8,R],[41,65,8,R]],
+      7:[[13,13,7,G],[30,21,7,G],[47,29,7,G],[19,49,7,R],[41,49,7,R],[19,67,7,R],[41,67,7,R]],
+      8:[[19,13,7.5,B],[41,13,7.5,B],[19,31,7.5,B],[41,31,7.5,B],[19,49,7.5,B],[41,49,7.5,B],[19,67,7.5,B],[41,67,7.5,B]],
+      9:[[14,15,8,B],[30,15,8,B],[46,15,8,B],[14,40,8,R],[30,40,8,R],[46,40,8,R],[14,65,8,G],[30,65,8,G],[46,65,8,G]]};
+    g=L[n].map(a=>pin(...a)).join('');
+  }else if(s===2){
+    if(n===1){g=`<rect x="25" y="20" width="10" height="46" rx="5" fill="${G}"/><circle cx="30" cy="20" r="9" fill="${R}"/><circle cx="30" cy="20" r="3.5" fill="#F6F0E0"/><path d="M18 66 L30 54 L42 66" fill="none" stroke="${G}" stroke-width="4" stroke-linecap="round"/>`;}
+    else{
+      const L={2:[[30,22],[30,58]],3:[[30,22],[18,58],[42,58]],4:[[18,22],[42,22],[18,58],[42,58]],5:[[16,22],[44,22],[30,40,'r'],[16,58],[44,58]],
+        6:[[14,22],[30,22],[46,22],[14,58],[30,58],[46,58]],7:[[30,14,'r'],[14,40],[30,40],[46,40],[14,66],[30,66],[46,66]],
+        8:[[12,22],[24,22],[36,22],[48,22],[12,58],[24,58],[36,58],[48,58]],
+        9:[[14,15],[30,15,'r'],[46,15],[14,40],[30,40,'r'],[46,40],[14,65],[30,65,'r'],[46,65]]};
+      const h=n>=7?20:28;
+      g=L[n].map(([x,y,c])=>stick(x,y,h,c?R:G)).join('');
+    }
+  }else{
+    const h=k-27;
+    if(h===4)g=`<rect x="13" y="16" width="34" height="48" rx="3" fill="none" stroke="${B}" stroke-width="3"/>`;
+    else g=`<text x="30" y="55" font-size="38" text-anchor="middle" class="th" fill="${h===5?G:h===6?R:'var(--ink)'}">${HONOR[h]}</text>`;
+  }
+  return FACE[k]=`<svg viewBox="0 0 60 80" aria-hidden="true">${g}</svg>`;
+}
+
+/* ---------- game state ---------- */
+let S=null, timer=null;
+const UI={view:false, assist:true, help:false};
+try{const u=JSON.parse(localStorage.getItem('glass-ui')||'{}');if(typeof u.assist==='boolean')UI.assist=u.assist;}catch(e){}
+function saveUI(){try{localStorage.setItem('glass-ui',JSON.stringify({assist:UI.assist}));}catch(e){}}
+
+const seatWind=p=>p===S.dealer?27:28;
+const cpuName=p=>p===0?'あなた':'CPU';
+function sortHand(p){S.hands[p].sort((a,b)=>a.k-b.k||(a.g===b.g?a.id-b.id:(a.g?1:-1)));}
+function ctxFor(p,tsumo){return{tsumo,riichi:S.riichi[p],ippatsu:S.ippatsu[p],last:S.wall.length===0,seat:seatWind(p),round:27,dora:S.doraInd.map(t=>doraFrom(t.k)),ura:S.uraInd.map(t=>doraFrom(t.k))};}
+
+function schedule(fn,args,delay){S.next={fn,args};clearTimeout(timer);timer=setTimeout(()=>{const n=S.next;S.next=null;if(n)FN[n.fn](...n.args);},delay);}
+
+function newGame(){
+  S={scores:[25000,25000],dealer:0,handNo:1,honba:0,pot:0,phase:'play'};
+  startHand();
+}
+function startHand(){
+  const tiles=shuffle(makeTiles());
+  S.dead=tiles.splice(0,14);
+  S.doraInd=[S.dead[4]]; S.uraInd=[S.dead[9]];
+  S.hands=[[],[]];
+  for(let i=0;i<13;i++){S.hands[0].push(tiles.pop());S.hands[1].push(tiles.pop());}
+  S.wall=tiles.slice(0,LIVE_WALL);
+  S.discards=[[],[]]; S.riichi=[false,false]; S.ippatsu=[false,false]; S.riichiIdx=[-1,-1];
+  S.furitenTemp=[false,false]; S.drawn=[null,null]; S.lastDiscard=null;
+  S.turn=S.dealer; S.phase='play'; S.sel=null; S.result=null; S.awaiting=null; S.riichiMode=false;
+  S.msg=`東${S.handNo}局 ${S.honba?S.honba+'本場 ':''}開始。親は<em>${cpuName(S.dealer)}</em>`;
+  sortHand(0); sortHand(1);
+  render(); schedule('drawTile',[S.dealer],700);
+}
+function canTsumo(p){
+  const c=counts(S.hands[p]); if(shanten(c)!==-1)return null;
+  const win=S.hands[p].find(t=>t.id===S.drawn[p]).k;
+  return evaluate(c,win,ctxFor(p,true));
+}
+function isFuriten(p){
+  const c=counts(S.hands[p]); if(S.hands[p].length!==13||shanten(c)!==0)return false;
+  const w=waitsOf(c); return S.furitenTemp[p]||w.some(k=>S.discards[p].some(d=>d.k===k));
+}
+function canRon(p,tile){
+  const c=counts(S.hands[p]); if(shanten(c)!==0)return null;
+  const w=waitsOf(c); if(!w.includes(tile.k))return null;
+  if(S.furitenTemp[p]||w.some(k=>S.discards[p].some(d=>d.k===k)))return null;
+  c[tile.k]++; return evaluate(c,tile.k,ctxFor(p,false));
+}
+function riichiOptions(p){
+  if(S.riichi[p]||S.scores[p]<1000||S.wall.length<2)return[];
+  const h=S.hands[p],c=counts(h),out=[];
+  for(const t of h){c[t.k]--;if(shanten(c)===0)out.push(t.id);c[t.k]++;}
+  return out;
+}
+function drawTile(p){
+  if(S.wall.length===0)return ryuukyoku();
+  const t=S.wall.shift(); S.hands[p].push(t); S.drawn[p]=t.id; S.turn=p; S.awaiting=null; S.sel=null;
+  if(p===0){
+    const tw=canTsumo(0);
+    if(S.riichi[0]){
+      if(tw){S.awaiting={type:'tsumo',res:tw};S.msg='<em>ツモ</em>和了できます';render();return;}
+      S.msg='リーチ中。ツモ切りします'; render(); schedule('discard',[0,t.id,false],650); return;
+    }
+    S.awaiting={type:'discard',tsumo:tw,riichi:riichiOptions(0)};
+    S.msg=tw?'<em>ツモ</em>和了できます':(HOVER?'捨てる牌をクリック':'牌をタップで選択、もう一度タップで捨てる');
+    render();
+  }else{render();schedule('cpuAct',[],700);}
+}
+function discard(p,id,decl){
+  const h=S.hands[p],t=h.splice(h.findIndex(x=>x.id===id),1)[0];
+  if(S.riichi[p]&&!decl)S.ippatsu[p]=false;
+  if(decl){S.riichi[p]=true;S.ippatsu[p]=true;S.scores[p]-=1000;S.pot++;S.riichiIdx[p]=S.discards[p].length;}
+  S.discards[p].push(t); S.drawn[p]=null; S.lastDiscard=t.id;
+  if(!S.riichi[p])S.furitenTemp[p]=false;
+  sortHand(p); S.awaiting=null; S.sel=null; S.riichiMode=false;
+  S.msg=decl?`<em>${cpuName(p)} リーチ</em> — ${tileName(t.k)}`:`${cpuName(p)}: ${tileName(t.k)}${t.g?'':'（不透明牌）'}`;
+  const o=1-p,r=canRon(o,t);
+  if(r){
+    if(o===1){render();schedule('win',[1,r,false],750);return;}
+    S.awaiting={type:'ron',res:r,tile:t}; S.msg=`${tileName(t.k)} で<em>ロン</em>できます`; render(); return;
+  }
+  afterDiscard(p);
+}
+function afterDiscard(p){
+  if(S.wall.length===0){render();schedule('ryuukyoku',[],700);return;}
+  render(); schedule('drawTile',[1-p],p===0?450:500);
+}
+function passRon(){const p=1-0;S.awaiting=null;S.furitenTemp[0]=true;afterDiscard(p);}
+function win(p,res,tsumo){
+  if(!tsumo){const t=S.discards[1-p].pop();S.hands[p].push(t);S.drawn[p]=t.id;}
+  const dealer=p===S.dealer;
+  const pay=ceil100(res.base*(dealer?6:4)), hb=S.honba*300, pot=S.pot*1000;
+  const before=S.scores.slice();
+  S.scores[1-p]-=pay+hb; S.scores[p]+=pay+hb+pot; S.pot=0;
+  S.result={type:'win',p,tsumo,res,pay,hb,pot,before,after:S.scores.slice(),renchan:dealer,winId:S.drawn[p]};
+  S.phase='result'; S.awaiting=null; render();
+}
+function ryuukyoku(){
+  const ten=[0,1].map(p=>shanten(counts(S.hands[p]))===0);
+  const before=S.scores.slice();
+  if(ten[0]!==ten[1]){const w=ten[0]?0:1;S.scores[w]+=1000;S.scores[1-w]-=1000;}
+  S.result={type:'draw',ten,before,after:S.scores.slice(),renchan:ten[S.dealer]};
+  S.phase='result'; S.awaiting=null; render();
+}
+function nextHand(){
+  const r=S.result;
+  if(r.renchan)S.honba++;
+  else{S.honba=r.type==='draw'?S.honba+1:0;S.dealer=1-S.dealer;S.handNo++;}
+  if(S.scores.some(s=>s<0)||S.handNo>4){S.phase='over';render();return;}
+  startHand();
+}
+
+/* ---------- CPU ---------- */
+function visibleTo(p){
+  const v=new Array(34).fill(0);
+  for(const t of S.hands[p])v[t.k]++;
+  for(const d of S.discards)for(const t of d)v[t.k]++;
+  for(const t of S.doraInd)v[t.k]++;
+  for(const t of S.hands[1-p])if(t.g)v[t.k]++;
+  return v;
+}
+function danger(k,vis){
+  if(S.discards[0].some(d=>d.k===k))return 0;
+  const pg=new Array(34).fill(0); for(const t of S.hands[0])if(t.g)pg[t.k]++;
+  let d;
+  if(k>=27){d=vis[k]>=3?0.2:vis[k]===2?1.2:2.5; if(pg[k]>=2)d+=7; else if(pg[k])d+=1.5;}
+  else{
+    const n=k%9; d=(n===0||n===8)?3:(n===1||n===7)?4:5;
+    const disc=j=>S.discards[0].some(t=>t.k===j);
+    const lo=n<3||disc(k-3), hi=n>5||disc(k+3);
+    if(lo&&hi)d*=0.4; else if(lo||hi)d*=0.75;
+    const g=j=>(j>=0&&j<27&&suitOf(j)===suitOf(k))?pg[j]:0;
+    if(g(k-1)&&g(k-2))d+=6; if(g(k+1)&&g(k+2))d+=6; if(g(k-1)&&g(k+1))d+=6;
+    if(pg[k]>=2)d+=6; else if(pg[k])d+=1;
+    if(vis[k]>=4)d=0;
+  }
+  return d;
+}
+function tileValue(k){
+  let v=isHonor(k)?(k>=31||k===seatWind(1)||k===27?1:0):isTerm(k)?1:(k%9===1||k%9===7)?2:3;
+  if(S.doraInd.some(t=>doraFrom(t.k)===k))v+=4;
+  return v;
+}
+function cpuChoose(){
+  const h=S.hands[1],c=counts(h),vis=visibleTo(1);
+  const kinds=[...new Set(h.map(t=>t.k))];
+  const ev=kinds.map(k=>{
+    c[k]--; const sh=shanten(c); let uk=0;
+    if(sh<=3)for(let j=0;j<34;j++){if(c[j]>=4)continue;c[j]++;if(shanten(c)<sh)uk+=Math.max(0,4-vis[j]);c[j]--;}
+    c[k]++;
+    return{k,sh,uk,dg:danger(k,vis),val:tileValue(k)};
+  });
+  const minSh=Math.min(...ev.map(e=>e.sh));
+  let pick;
+  if(S.riichi[0]){
+    const push=minSh===0||(minSh===1&&S.wall.length>16);
+    if(push){
+      const cand=ev.filter(e=>e.sh===minSh).sort((a,b)=>a.dg-b.dg||b.uk-a.uk);
+      pick=cand[0];
+      if(minSh===0&&pick.dg>8){const safe=ev.filter(e=>e.dg<2).sort((a,b)=>a.sh-b.sh||b.uk-a.uk)[0];if(safe)pick=safe;}
+    }else pick=ev.slice().sort((a,b)=>a.dg-b.dg||a.sh-b.sh||b.uk-a.uk)[0];
+  }else{
+    pick=ev.slice().sort((a,b)=>a.sh-b.sh||b.uk-a.uk||a.val-b.val)[0];
+  }
+  const same=h.filter(t=>t.k===pick.k);
+  const tile=same.find(t=>t.g)||same[0]; // keep the hidden copy hidden
+  const ro=riichiOptions(1);
+  return{id:tile.id,riichi:ro.includes(tile.id)};
+}
+function cpuAct(){
+  const tw=canTsumo(1); if(tw)return win(1,tw,true);
+  if(S.riichi[1])return discard(1,S.drawn[1],false);
+  const ch=cpuChoose(); discard(1,ch.id,ch.riichi);
+}
+const FN={drawTile,discard,cpuAct,win,ryuukyoku};
+
+/* ---------- player input ---------- */
+const HOVER=window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+function onTile(id){
+  if(!S.awaiting||S.awaiting.type!=='discard'||S.next)return;
+  if(S.riichiMode&&!S.awaiting.riichi.includes(id))return;
+  if(HOVER||S.sel===id){discard(0,id,S.riichiMode);}
+  else{S.sel=id;render();}
+}
+function onAction(a){
+  const aw=S.awaiting; if(!aw)return;
+  if(a==='tsumo'&&(aw.type==='tsumo'||aw.tsumo))return win(0,aw.type==='tsumo'?aw.res:aw.tsumo,true);
+  if(a==='riichi'){S.riichiMode=true;S.sel=null;S.msg='リーチ宣言牌を選んでください';render();return;}
+  if(a==='cancel'){S.riichiMode=false;S.msg='捨てる牌を選んでください';render();return;}
+  if(a==='skipTsumo'){S.awaiting=null;S.furitenTemp[0]=true;discard(0,S.drawn[0],false);return;}
+  if(a==='ron')return win(0,aw.res,false);
+  if(a==='skipRon')return passRon();
+}
+
+/* ---------- rendering ---------- */
+const $=id=>document.getElementById(id);
+function tileEl(t,cls=''){return `<div class="tile ${t.g?'glass':'solid'} ${cls}" title="${tileName(t.k)}${t.g?'（透明）':'（不透明）'}">${faceSVG(t.k)}</div>`;}
+const backEl=(cls='')=>`<div class="tile back ${cls}"></div>`;
+function riverHTML(p){
+  return S.discards[p].map((t,i)=>tileEl(t,(i===S.riichiIdx[p]?'rii ':'')+(t.id===S.lastDiscard&&i===S.discards[p].length-1?'last':''))).join('');
+}
+function myHandHTML(){
+  const h=S.hands[0],aw=S.awaiting,canDis=aw&&aw.type==='discard'&&!S.next;
+  let rec=[];
+  if(UI.assist&&canDis&&h.length===14){
+    const c=counts(h);let best=99;const sh={};
+    for(const t of h){if(sh[t.k]!==undefined)continue;c[t.k]--;sh[t.k]=shanten(c);c[t.k]++;best=Math.min(best,sh[t.k]);}
+    rec=Object.keys(sh).filter(k=>sh[k]===best).map(Number);
+  }
+  const drawn=S.drawn[0];
+  const main=h.filter(t=>t.id!==drawn), d=h.find(t=>t.id===drawn);
+  const one=t=>{
+    const allowed=canDis&&(!S.riichiMode||aw.riichi.includes(t.id));
+    const cls=[t.g?'glass':'solid',allowed?'can':'',S.sel===t.id?'sel':'',S.riichiMode&&!allowed?'dim':'',rec.includes(t.k)&&!S.riichiMode?'rec':'',UI.view&&!t.g?'peek':''].join(' ');
+    if(UI.view&&!t.g)return `<button class="tile back ${cls}" data-id="${t.id}" ${allowed?'':'disabled'} aria-label="${tileName(t.k)}"></button>`;
+    return `<button class="tile ${cls}" data-id="${t.id}" ${allowed?'':'disabled'} aria-label="${tileName(t.k)}${t.g?' 透明':' 不透明'}">${faceSVG(t.k)}</button>`;
+  };
+  return main.map(one).join('')+(d?'<span class="gap"></span>'+one(d):'');
+}
+function cpuHandHTML(){
+  const h=S.hands[1],drawn=S.drawn[1];
+  const main=h.filter(t=>t.id!==drawn),d=h.find(t=>t.id===drawn);
+  const one=t=>t.g?tileEl(t):backEl();
+  return main.map(one).join('')+(d?'<span class="gap"></span>'+one(d):'');
+}
+function statusHTML(){
+  const h=S.hands[0]; if(h.length!==13)return '';
+  const c=counts(h),sh=shanten(c);
+  if(sh>0)return `${sh}向聴`;
+  const vis=visibleTo(0),w=waitsOf(c);
+  const left=w.reduce((a,k)=>a+Math.max(0,4-vis[k]),0);
+  return `聴牌 待ち <b>${w.map(tileName).join(' ')}</b>（見えない残り ${left}枚）`;
+}
+function actionsHTML(){
+  const aw=S.awaiting; if(!aw||S.next)return '<span class="hint">'+(S.turn===1&&S.phase==='play'?'CPU 考慮中…':'')+'</span>';
+  if(aw.type==='ron')return `<button class="btn primary" data-a="ron">ロン</button><button class="btn" data-a="skipRon">見送り</button>`;
+  if(aw.type==='tsumo')return `<button class="btn primary" data-a="tsumo">ツモ</button><button class="btn" data-a="skipTsumo">見送り</button>`;
+  let s='';
+  if(aw.tsumo)s+=`<button class="btn primary" data-a="tsumo">ツモ</button>`;
+  if(S.riichiMode)s+=`<button class="btn" data-a="cancel">リーチ取消</button>`;
+  else if(aw.riichi.length)s+=`<button class="btn red" data-a="riichi">リーチ</button>`;
+  return s||'<span class="hint">あなたの番です</span>';
+}
+function fmt(n){return n.toLocaleString('ja-JP');}
+function render(){
+  if(!S)return;
+  $('roundLabel').textContent=`東${Math.min(S.handNo,4)}局`;
+  $('honbaLabel').textContent=S.honba?`${S.honba}本場`:'';
+  $('doraInd').innerHTML=S.doraInd.map(t=>tileEl(t)).join('');
+  $('wallCount').textContent=S.wall.length;
+  $('potLabel').textContent=S.pot;
+  $('cpuScore').textContent=fmt(S.scores[1]); $('myScore').textContent=fmt(S.scores[0]);
+  for(const [id,p] of [['cpuWind',1],['myWind',0]]){const e=$(id);e.textContent=HONOR[seatWind(p)-27];e.className='wind'+(p===S.dealer?' dealer':'');e.title=p===S.dealer?'親':'子';}
+  $('cpuRiichi').hidden=!S.riichi[1]; $('myRiichi').hidden=!S.riichi[0]; $('myFuri').hidden=!isFuriten(0);
+  $('cpuHand').innerHTML=cpuHandHTML(); $('cpuRiver').innerHTML=riverHTML(1);
+  $('myRiver').innerHTML=riverHTML(0); $('myHand').innerHTML=myHandHTML();
+  $('myStatus').innerHTML=UI.assist?statusHTML():'';
+  $('msg').innerHTML=S.msg||'';
+  $('actions').innerHTML=S.phase==='play'?actionsHTML():'';
+  $('viewBtn').setAttribute('aria-pressed',UI.view); $('assistBtn').setAttribute('aria-pressed',UI.assist);
+  renderOverlay();
+}
+function handRow(tiles,winId,doraKinds){
+  const main=tiles.filter(t=>t.id!==winId).sort((a,b)=>a.k-b.k),w=tiles.find(t=>t.id===winId);
+  return `<div class="rowtiles">${main.map(t=>tileEl(t)).join('')}${w?'<span class="gap"></span>'+tileEl(w,'win'):''}</div>`;
+}
+function scoreTable(r){
+  return `<div class="scores">${[0,1].map(p=>{const d=r.after[p]-r.before[p];return `<span>${cpuName(p)}</span><span class="${d>0?'up':d<0?'down':''}">${d>0?'+':''}${d?fmt(d):''}</span><span>${fmt(r.after[p])}</span>`;}).join('')}</div>`;
+}
+function rulesHTML(){
+  return `<div class="rules">
+  <p class="lead">136枚のうち、各種4枚中3枚が<b>透明な硝子牌</b>、1枚だけが不透明牌。相手の手牌の約4分の3は丸見えです。</p>
+  <div class="legend"><span>${tileEl({k:4,g:true})} 硝子牌（相手から見える）</span><span>${tileEl({k:4,g:false})} 不透明牌（見えない）</span><span>${backEl()} 相手の不透明牌</span></div>
+  <h3>対局</h3>
+  <ul><li>あなた vs CPU の1対1。東風戦4局、持ち点25,000点。</li><li>鳴きなし（ポン・チー・カンなし）の門前のみ。山は各局40枚まで。</li><li>手牌は種類順に並ぶので、相手の伏せ牌の<b>位置</b>からも中身を推理できます。</li><li>CPUもあなたの硝子牌を見て、危険牌を避けたり残り枚数を数えたりします。</li></ul>
+  <h3>和了と点数</h3>
+  <ul><li>通常の役・翻・符で計算（立直・一発・ツモ・平和・断幺九・役牌・一盃口・三色・一通・チャンタ・対々・三暗刻・七対子・混一色・清一色・各種役満など）。</li><li>ロンには役が必要。フリテンあり。ツモ和了も相手が全額支払い。</li><li>流局時はノーテンの側が聴牌の側に1,000点。親が和了か聴牌なら連荘。誰かが0点未満で終了。</li></ul>
+  <h3>操作</h3>
+  <ul><li>${HOVER?'牌をクリックで捨てる':'牌をタップで選び、もう一度タップで捨てる'}。</li><li><b>CPU視点</b>: 自分の手牌がCPUからどう見えているか表示。</li><li><b>アシスト</b>: 向聴数・待ち・おすすめ打牌（金の点）を表示。</li></ul></div>`;
+}
+function renderOverlay(){
+  const ov=$('overlay'),pn=$('panel');
+  let html='';
+  if(UI.help){html=`<h2>ルール</h2>${rulesHTML()}<div class="actions"><button class="btn primary" data-o="closeHelp">閉じる</button></div>`;}
+  else if(S.phase==='title'){html=`<h2>硝子牌麻雀<small>Glass Tile Mahjong</small></h2>${rulesHTML()}<div class="actions"><button class="btn primary" data-o="start">対局開始</button></div>`;}
+  else if(S.phase==='result'){
+    const r=S.result;
+    if(r.type==='win'){
+      const res=r.res;
+      html=`<h2>${r.tsumo?'ツモ':'ロン'}<small>${cpuName(r.p)}の和了${r.p===S.dealer?'（親）':''}</small></h2>
+      ${handRow(S.hands[r.p],r.winId)}
+      <div class="legend"><span>ドラ表示 ${S.doraInd.map(t=>tileEl(t)).join('')}</span>${S.riichi[r.p]?`<span>裏ドラ表示 ${S.uraInd.map(t=>tileEl(t)).join('')}</span>`:''}</div>
+      <div class="yaku">${res.yaku.map(y=>`<span>${y[0]}</span><span>${typeof y[1]==='number'?y[1]+'翻':y[1]}</span>`).join('')}</div>
+      <div class="total"><span class="big">${fmt(r.pay)}</span><span>${res.yakuman?res.label:`${res.han}翻 ${res.fu}符${res.label?' '+res.label:''}`}</span>${r.hb?`<span class="hint">本場 +${r.hb}</span>`:''}${r.pot?`<span class="hint">供託 +${fmt(r.pot)}</span>`:''}</div>
+      ${scoreTable(r)}`;
+    }else{
+      html=`<h2>流局<small>${r.ten.map((t,p)=>`${cpuName(p)}: ${t?'聴牌':'ノーテン'}`).join(' / ')}</small></h2>
+      <p class="lead">CPUの手牌</p>${handRow(S.hands[1],null)}${scoreTable(r)}`;
+    }
+    const end=S.scores.some(s=>s<0)||(!r.renchan&&S.handNo>=4);
+    html+=`<div class="actions"><button class="btn primary" data-o="next">${end?'最終結果へ':'次の局へ'}</button></div>`;
+  }else if(S.phase==='over'){
+    const [a,b]=S.scores, w=a>b?'あなたの勝ち':a<b?'CPUの勝ち':'引き分け';
+    html=`<h2>${w}<small>東風戦 終了</small></h2>
+    <div class="scores"><span>あなた</span><span></span><span>${fmt(a)}</span><span>CPU</span><span></span><span>${fmt(b)}</span></div>
+    ${S.pot?`<p class="lead">供託 ${fmt(S.pot*1000)}点は持ち越しなし</p>`:''}
+    <div class="actions"><button class="btn primary" data-o="start">もう一度</button></div>`;
+  }
+  ov.hidden=!html; if(html)pn.innerHTML=html;
+}
+
+/* ---------- events ---------- */
+$('myHand').addEventListener('click',e=>{const b=e.target.closest('button.tile');if(b)onTile(+b.dataset.id);});
+$('actions').addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(b)onAction(b.dataset.a);});
+$('panel').addEventListener('click',e=>{
+  const b=e.target.closest('[data-o]'); if(!b)return;
+  const o=b.dataset.o;
+  if(o==='closeHelp'){UI.help=false;render();}
+  if(o==='start'){UI.help=false;newGame();}
+  if(o==='next')nextHand();
+});
+$('helpBtn').onclick=()=>{UI.help=true;render();};
+$('viewBtn').onclick=()=>{UI.view=!UI.view;render();};
+$('assistBtn').onclick=()=>{UI.assist=!UI.assist;saveUI();render();};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&UI.help){UI.help=false;render();}});
+
+function start(data){
+  if(data&&data.S){S=data.S;render();if(S.next){const n=S.next;schedule(n.fn,n.args,400);}return;}
+  S={phase:'title',scores:[25000,25000],dealer:0,handNo:1,honba:0,pot:0,hands:[[],[]],discards:[[],[]],riichi:[false,false],riichiIdx:[-1,-1],doraInd:[],uraInd:[],wall:[],drawn:[null,null],furitenTemp:[false,false]};
+  render();
+}
+window.claude?.hot?.snapshot?.(()=>({S}));
+window.claude?.hot?.ready?window.claude.hot.ready(start):start(window.claude?.hot?.data??{});
+</script>
+
+</body>
+</html>
