@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
-/* Layout: four-seat night table. Phone: opponents stacked above you. Desktop: 対面 on top, 上家 left, 下家 right, you at the bottom. Single deliberate dark look. */
+/* Layout: a square felt table. Each seat (hand + river + score chip) is laid out as if it sat at the bottom, then the whole seat layer is rotated to its side; the centre box holds round, wall and dora. Your own hand sits under the table at full size. Single deliberate dark look. */
 :root{
   --table:#0E1922; --table-hi:#16293A; --line:rgba(205,167,94,.22); --panel:rgba(255,255,255,.025);
   --text:#ECE6D6; --muted:#93A3AF; --brass:#CDA75E; --brass-hi:#E6C27A;
@@ -20,19 +20,44 @@
   --f-display:"Shippori Mincho B1","Hiragino Mincho ProN","Yu Mincho",serif;
   --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
   --f-num:"IBM Plex Mono",ui-monospace,monospace;
-  --tw:clamp(20px, calc((min(100vw, 900px) - 64px) / 15.6), 46px);
-  --ow:calc(var(--tw)*.8); --rw:calc(var(--tw)*.7); --mrw:calc(var(--tw)*.74);
+  --felt:#123444; --felt-dk:#0B2230;
+  --tw:clamp(20px, calc((min(100vw, 860px) - 44px) / 15), 48px);
+  --T:max(300px, min(calc(100vw - 32px), calc(100vh - 290px), 860px));
+  --C:calc(var(--T)*.35); --rw:calc(var(--T)*.052); --ow:calc(var(--T)*.05);
   color-scheme:dark;
 }
+@supports (height:100dvh){ :root{ --T:max(300px, min(calc(100vw - 32px), calc(100dvh - 290px), 860px)); } }
 [hidden]{display:none!important}
 html,body{min-height:100%}
 body{margin:0; background:radial-gradient(120% 80% at 50% 45%, var(--table-hi), var(--table) 70%) fixed; background-color:var(--table); color:var(--text); font-family:var(--f-body); font-size:14px; overflow-x:hidden}
-#app{max-width:1100px; margin:0 auto; display:grid; gap:8px; grid-template-columns:minmax(0,1fr); grid-template-areas:"hdr" "o2" "o3" "o1" "ctr" "me"; padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px)); padding-block:10px; box-sizing:border-box}
-@media (min-width:900px){
-  #app{grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-template-areas:"hdr hdr" "o2 o2" "o3 o1" "ctr ctr" "me me"; gap:10px 18px}
-  :root{--ow:min(calc(var(--tw)*.8), calc((min(100vw,1100px) - 90px) / 2 / 16.5)); --rw:min(calc(var(--tw)*.66), calc((min(100vw,1100px) - 90px) / 2 / 19))}
-  #o2 .hand, #o2 .river{justify-content:center}
-}
+#app{max-width:900px; margin:0 auto; display:flex; flex-direction:column; gap:8px; padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px)); padding-block:8px; box-sizing:border-box}
+
+/* table */
+.table{position:relative; width:var(--T); height:var(--T); margin:0 auto; flex:none; border-radius:calc(var(--T)*.035); background:radial-gradient(circle at 50% 50%, var(--felt) 0%, var(--felt-dk) 85%); box-shadow:inset 0 0 0 calc(var(--T)*.012) #2A1C12, inset 0 0 0 calc(var(--T)*.016) rgba(205,167,94,.35), inset 0 0 calc(var(--T)*.08) rgba(0,0,0,.55), 0 14px 40px rgba(0,0,0,.5)}
+.cbox{position:absolute; left:50%; top:50%; width:var(--C); height:var(--C); transform:translate(-50%,-50%); border-radius:calc(var(--T)*.02); background:rgba(4,12,18,.7); box-shadow:inset 0 0 0 1px rgba(205,167,94,.3)}
+.cmid{position:absolute; inset:22%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:calc(var(--T)*.006); text-align:center; font-size:calc(var(--T)*.03); color:var(--muted); line-height:1.2}
+.cmid .rnd{font-family:var(--f-display); font-weight:800; font-size:calc(var(--T)*.042); color:var(--brass-hi); letter-spacing:.06em; white-space:nowrap}
+.cmid b{font-family:var(--f-num); font-weight:500; color:var(--text)}
+.cmid .dora{display:flex; gap:1px}
+.cmid .dora .tile{--w:calc(var(--T)*.04)}
+.frame{position:absolute; inset:0; pointer-events:none}
+.f1{transform:rotate(-90deg)} .f2{transform:rotate(180deg)} .f3{transform:rotate(90deg)}
+.frame .river{position:absolute; left:calc(50% - var(--C)/2); top:calc(50% + var(--C)/2 + var(--T)*.008); display:flex; flex-direction:column; gap:calc(var(--T)*.003)}
+.rrow{display:flex; gap:1px; align-items:flex-end; min-height:calc(var(--rw)*1.36)}
+.frame .river .tile{--w:var(--rw)}
+.ohand{position:absolute; bottom:calc(var(--T)*.022); left:50%; transform:translateX(-50%); display:flex; align-items:flex-end; gap:1px; white-space:nowrap}
+.ohand .tile{--w:var(--ow)}
+.ohand .gap{width:calc(var(--ow)*.3); flex:none}
+.ohand .melds{margin-left:calc(var(--ow)*.5); gap:calc(var(--ow)*.2)}
+.ohand .melds .tile{--w:calc(var(--ow)*.9)}
+.seatchip{position:absolute; left:50%; top:calc(50% + var(--C)/2 - var(--T)*.052); transform:translateX(-50%); display:flex; align-items:center; gap:calc(var(--T)*.01); white-space:nowrap; font-size:calc(var(--T)*.028); padding:calc(var(--T)*.004) calc(var(--T)*.014); border-radius:999px; color:var(--text)}
+.seatchip .w{font-family:var(--f-display); font-weight:800; color:var(--brass)}
+.seatchip .w.dealer{background:var(--brass); color:var(--table); border-radius:3px; padding:0 3px}
+.seatchip .sc{font-family:var(--f-num); font-variant-numeric:tabular-nums}
+.seatchip .nm{color:var(--muted)}
+.seatchip.turn{background:rgba(205,167,94,.22); box-shadow:inset 0 0 0 1px var(--brass)}
+.stick{position:absolute; left:50%; top:calc(50% + var(--C)/2 - var(--T)*.075); width:calc(var(--C)*.5); height:calc(var(--T)*.012); transform:translateX(-50%); border-radius:99px; background:#F2EEE2; box-shadow:0 1px 2px rgba(0,0,0,.5)}
+.stick::after{content:""; position:absolute; left:50%; top:50%; width:calc(var(--T)*.009); height:calc(var(--T)*.009); transform:translate(-50%,-50%); border-radius:50%; background:var(--t-red)}
 button{font-family:inherit; color:inherit}
 :focus-visible{outline:2px solid var(--brass-hi); outline-offset:2px}
 
@@ -135,33 +160,37 @@ button{font-family:inherit; color:inherit}
 .legend{display:flex; gap:16px; flex-wrap:wrap; align-items:center; color:var(--muted); font-size:12px}
 .legend span{display:inline-flex; gap:6px; align-items:center}
 .legend .tile{--w:22px}
-@media (max-width:420px){ .panel{padding:16px} .panel h2{font-size:24px} .btn{padding:8px 13px} }
+@media (max-width:420px){ .brand{font-size:16px; letter-spacing:.06em} .bar{gap:6px; flex-wrap:nowrap} .ghost{padding:3px 9px; font-size:11px; white-space:nowrap} .panel{padding:16px} .panel h2{font-size:24px} .btn{padding:8px 13px} }
 @media (prefers-reduced-motion:reduce){ .tile{transition:none} }
 </style>
 
 <div id="app">
   <header class="bar">
     <div class="brand">硝子牌麻雀</div>
-    <span class="chip"><b id="roundLabel">東1局</b><span id="honbaLabel"></span></span>
-    <span class="chip">ドラ表示 <span id="doraInd"></span></span>
-    <span class="chip">残り <b id="wallCount">0</b></span>
-    <span class="chip">供託 <b id="potLabel">0</b></span>
     <span class="spacer"></span>
     <button class="ghost" id="viewBtn" aria-pressed="false" title="他家から見えている自分の手牌">他家視点</button>
     <button class="ghost" id="assistBtn" aria-pressed="true">アシスト</button>
     <button class="ghost" id="helpBtn">ルール</button>
   </header>
 
-  <section class="seat opp" id="o2"></section>
-  <section class="seat opp" id="o3"></section>
-  <section class="seat opp" id="o1"></section>
+  <div class="table" id="table">
+    <div class="cbox"><div class="cmid">
+      <span class="rnd" id="roundLabel">東1局</span>
+      <span><span id="honbaLabel">0本場</span> 供託<b id="potLabel">0</b></span>
+      <span>残り <b id="wallCount">0</b></span>
+      <span class="dora" id="doraInd" title="ドラ表示牌"></span>
+    </div></div>
+    <div class="frame f0" id="f0"></div>
+    <div class="frame f1" id="f1"></div>
+    <div class="frame f2" id="f2"></div>
+    <div class="frame f3" id="f3"></div>
+  </div>
 
   <div class="center"><div id="msg"></div></div>
 
   <section class="seat me" id="me">
-    <div class="river" id="myRiver"></div>
     <div class="hand" id="myHand"></div>
-    <div class="who"><span class="name">あなた</span><span class="wind" id="myWind">東</span><span class="score" id="myScore">25000</span><span class="flag" id="myRiichi" hidden>リーチ</span><span class="flag furi" id="myFuri" hidden>フリテン</span><span class="status" id="myStatus"></span></div>
+    <div class="who"><span class="flag furi" id="myFuri" hidden>フリテン</span><span class="status" id="myStatus"></span></div>
     <div class="actions" id="actions"></div>
   </section>
 </div>
@@ -724,7 +753,16 @@ const $=id=>document.getElementById(id);
 function tileEl(t,cls=''){return `<div class="tile ${t.g?'glass':'solid'} ${cls}" title="${tileName(t.k)}${t.g?'（透明）':'（不透明）'}">${faceSVG(t.k)}</div>`;}
 const backEl=(cls='')=>`<div class="tile back ${cls}"></div>`;
 function riverHTML(p){
-  return S.discards[p].map((t,i)=>tileEl(t,[i===S.riichiIdx[p]?'side':'',t.called?'called':'',t.id===S.lastDiscard&&i===S.discards[p].length-1&&!t.called?'last':''].join(' '))).join('');
+  const d=S.discards[p];
+  const el=(t,i)=>tileEl(t,[i===S.riichiIdx[p]?'side':'',t.called?'called':'',t.id===S.lastDiscard&&i===d.length-1&&!t.called?'last':''].join(' '));
+  const rows=[[0,6],[6,12],[12,99]];
+  return rows.map(([a,b])=>`<div class="rrow">${d.slice(a,b).map((t,j)=>el(t,a+j)).join('')}</div>`).join('');
+}
+function frameHTML(p){
+  const chip=`<div class="seatchip ${S.phase==='play'&&S.turn===p?'turn':''}"><span class="w ${p===S.dealer?'dealer':''}">${HONOR[seatWind(p)-27]}</span><span class="sc">${fmt(S.scores[p])}</span><span class="nm">${NAMES[p]}</span></div>`;
+  const stick=S.riichi[p]?'<div class="stick" title="リーチ"></div>':'';
+  const hand=p===0?'':`<div class="ohand">${concealedHTML(p)}<span class="melds">${meldsHTML(p)}</span></div>`;
+  return `<div class="river">${riverHTML(p)}</div>${hand}${stick}${chip}`;
 }
 function meldsHTML(p){
   return S.melds[p].map(m=>`<div class="meld">${m.tiles.map(t=>tileEl(t,t.id===m.calledId?'side':'')).join('')}</div>`).join('');
@@ -792,16 +830,13 @@ function fmt(n){return n.toLocaleString('ja-JP');}
 function render(){
   if(!S)return;
   $('roundLabel').textContent=`東${Math.min(S.handNo,4)}局`;
-  $('honbaLabel').textContent=S.honba?`${S.honba}本場`:'';
+  $('honbaLabel').textContent=`${S.honba}本場`;
   $('doraInd').innerHTML=S.doraInd.map(t=>tileEl(t)).join('');
   $('wallCount').textContent=S.wall.length;
   $('potLabel').textContent=S.pot;
-  for(const p of [1,2,3]){const e=$('o'+p);e.innerHTML=oppHTML(p);e.classList.toggle('turn',S.phase==='play'&&S.turn===p);}
-  $('me').classList.toggle('turn',S.phase==='play'&&S.turn===0);
-  $('myScore').textContent=fmt(S.scores[0]);
-  const mw=$('myWind');mw.textContent=HONOR[seatWind(0)-27];mw.className='wind'+(S.dealer===0?' dealer':'');
-  $('myRiichi').hidden=!S.riichi[0]; $('myFuri').hidden=!isFuriten(0);
-  $('myRiver').innerHTML=riverHTML(0); $('myHand').innerHTML=myHandHTML();
+  for(const p of [0,1,2,3])$('f'+p).innerHTML=frameHTML(p);
+  $('myFuri').hidden=!isFuriten(0);
+  $('myHand').innerHTML=myHandHTML();
   $('myStatus').innerHTML=UI.assist?statusHTML():'';
   $('msg').innerHTML=S.msg||'';
   $('actions').innerHTML=S.phase==='play'?actionsHTML():'';
