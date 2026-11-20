@@ -232,7 +232,7 @@ const isYao=k=>isHonor(k)||isTerm(k);
 const suitOf=k=>k<27?Math.floor(k/9):3;
 function tileName(k){return k<27?KNUM[k%9]+['萬','筒','索'][suitOf(k)]:HONOR[k-27];}
 function doraFrom(i){if(i<27)return suitOf(i)*9+(i%9+1)%9; if(i<31)return 27+(i-27+1)%4; return 31+(i-31+1)%3;}
-function makeTiles(){const a=[];for(let k=0;k<34;k++)for(let c=0;c<4;c++)a.push({id:k*4+c,k,g:c<3});return a;}
+function makeTiles(sanma){const a=[];for(let k=0;k<34;k++){if(sanma&&k>=1&&k<=7)continue;for(let c=0;c<4;c++)a.push({id:k*4+c,k,g:c<3});}return a;}
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function counts(tiles){const c=new Array(34).fill(0);for(const t of tiles)c[t.k]++;return c;}
 
@@ -328,11 +328,13 @@ function evaluate(c,win,ctx,fixed=[]){
     }else{
       const yh=f.yaku.reduce((a,y)=>a+y[1],0); if(!yh)continue;
       const yaku=f.yaku.slice();
-      let dora=0;for(const d of ctx.dora)dora+=all[d];
+      const nuki=ctx.nuki||0;
+      let dora=0;for(const d of ctx.dora)dora+=all[d]+(d===30?nuki:0);
       if(dora)yaku.push(['ドラ',dora]);
-      let ura=0;if(ctx.riichi)for(const d of ctx.ura)ura+=all[d];
+      if(nuki)yaku.push(['抜きドラ',nuki]);
+      let ura=0;if(ctx.riichi)for(const d of ctx.ura)ura+=all[d]+(d===30?nuki:0);
       if(ura)yaku.push(['裏ドラ',ura]);
-      const han=yh+dora+ura; const [base,label]=limitOf(han,f.fu);
+      const han=yh+dora+ura+nuki; const [base,label]=limitOf(han,f.fu);
       r={yaku,han,fu:f.fu,base,label,yakuman:false};
     }
     if(!best||r.base>best.base||(r.base===best.base&&r.han>best.han))best=r;
@@ -446,47 +448,54 @@ const UI={view:false,assist:true,help:false,sel:null,riichiMode:false,pending:fa
 try{const u=JSON.parse(lsGet('glass-ui')||'{}');if(typeof u.assist==='boolean')UI.assist=u.assist;}catch(e){}
 function saveUI(){lsSet('glass-ui',JSON.stringify({assist:UI.assist}));}
 
-function blankState(phase){
+function blankState(phase,n=4){
   const z=v=>[v,v,v,v];
-  return{phase:phase||'title',scores:z(25000),dealer:0,handNo:1,honba:0,pot:0,hands:[[],[],[],[]],melds:[[],[],[],[]],discards:[[],[],[],[]],
+  return{phase:phase||'title',n,scores:z(n===3?35000:25000),kita:[[],[],[],[]],rin:0,dealer:0,handNo:1,honba:0,pot:0,hands:[[],[],[],[]],melds:[[],[],[],[]],discards:[[],[],[],[]],
     riichi:z(false),riichiIdx:z(-1),ippatsu:z(false),doraInd:[],uraInd:[],wall:[],dead:[],drawn:z(null),furitenTemp:z(false),kuikae:[[],[],[],[]],
     names:null,humans:['local',null,null,null],awaiting:null,result:null,claim:null,msg:'',turn:0,kans:0,rinshan:false,lastDiscard:null,next:null};
 }
-function pname(p){return S.names&&S.names[p]?S.names[p]:REL[p];}
-function label(p){if(!SPECT&&p===ME)return 'あなた';return S.names&&S.names[p]?S.names[p]:REL[(p-ME+4)%4];}
+const NP=()=>S.n===3?3:4;
+const REL3=['あなた','下家','上家'];
+const relOf=p=>(p-ME+NP())%NP();
+function relName(r){return NP()===3?REL3[r]:REL[r];}
+function frameOf(p){const r=relOf(p);return NP()===3?[0,1,3][r]:r;}
+function pname(p){return S.names&&S.names[p]?S.names[p]:relName(p);}
+function label(p){if(!SPECT&&p===ME)return 'あなた';return S.names&&S.names[p]?S.names[p]:relName(relOf(p));}
+const seats=()=>[0,1,2,3].slice(0,NP());
+function doraOf(i){return S.n===3&&i<9?(i===0?8:0):doraFrom(i);}
 function isActive(p){
   const h=S.humans&&S.humans[p]; if(!h)return false;
   if(NET.mode==='solo'||h==='local'||h===NET.cid)return true;
   return NET.present.has(h);
 }
-const seatWind=p=>27+(p-S.dealer+4)%4;
+const seatWind=p=>27+(p-S.dealer+NP())%NP();
 function sortHand(p){S.hands[p].sort((a,b)=>a.k-b.k||(a.g===b.g?a.id-b.id:(a.g?1:-1)));}
 const fixedOf=p=>S.melds[p].map(m=>({t:m.type==='chi'?'chi':'pon',k:m.k,open:m.type!=='ankan',kan:/kan/.test(m.type)}));
 function ctxFor(p,tsumo,extra={}){
   return Object.assign({tsumo,riichi:S.riichi[p],ippatsu:S.ippatsu[p],last:!S.rinshan&&S.wall.length===0,rinshan:false,chankan:false,
-    seat:seatWind(p),round:27,dora:S.doraInd.map(t=>doraFrom(t.k)),ura:S.uraInd.slice(0,S.doraInd.length).map(t=>doraFrom(t.k))},extra);
+    seat:seatWind(p),round:27,dora:S.doraInd.map(t=>doraOf(t.k)),ura:S.uraInd.slice(0,S.doraInd.length).map(t=>doraOf(t.k)),nuki:(S.kita&&S.kita[p]||[]).length},extra);
 }
 function schedule(fn,args,delay){S.next={fn,args};clearTimeout(timer);timer=setTimeout(()=>{const n=S.next;S.next=null;if(n&&FN[n.fn])FN[n.fn](...n.args);},delay);}
 
-function initGame(names,humans){
-  S=blankState('play'); S.names=names; S.humans=humans;
+function initGame(names,humans,n=4){
+  S=blankState('play',n); S.names=names; S.humans=humans;
   startHand();
 }
-function newSolo(){NET.mode='solo';ME=0;SPECT=false;initGame(null,['local',null,null,null]);}
+function newSolo(n=4){NET.mode='solo';ME=0;SPECT=false;initGame(null,['local',null,null,null],n);}
 function startHand(){
-  const tiles=shuffle(makeTiles());
-  S.dead=tiles.splice(0,14);
+  const tiles=shuffle(makeTiles(S.n===3));
+  S.dead=tiles.splice(0,14); S.rin=0;
   S.doraInd=[S.dead[4]]; S.uraInd=[S.dead[5],S.dead[7],S.dead[9],S.dead[11],S.dead[13]];
   S.hands=[[],[],[],[]];
-  for(let i=0;i<13;i++)for(let p=0;p<4;p++)S.hands[p].push(tiles.pop());
+  for(let i=0;i<13;i++)for(const p of seats())S.hands[p].push(tiles.pop());
   S.wall=tiles;
-  S.melds=[[],[],[],[]]; S.discards=[[],[],[],[]];
+  S.melds=[[],[],[],[]]; S.discards=[[],[],[],[]]; S.kita=[[],[],[],[]];
   S.riichi=[false,false,false,false]; S.ippatsu=[false,false,false,false]; S.riichiIdx=[-1,-1,-1,-1];
   S.furitenTemp=[false,false,false,false]; S.drawn=[null,null,null,null]; S.kuikae=[[],[],[],[]];
   S.kans=0; S.rinshan=false; S.lastDiscard=null; S.claim=null;
   S.turn=S.dealer; S.phase='play'; S.result=null; S.awaiting=null; UI.sel=null; UI.riichiMode=false;
   S.msg=`東${S.handNo}局 ${S.honba?S.honba+'本場 ':''}開始。親は<em>${pname(S.dealer)}</em>`;
-  for(let p=0;p<4;p++)sortHand(p);
+  for(const p of seats())sortHand(p);
   render(); schedule('drawTile',[S.dealer,false],800);
 }
 function handCounts(p){return counts(S.hands[p]);}
@@ -523,7 +532,7 @@ function callOptions(p,from,tile){
   const c=handCounts(p),k=tile.k;
   if(c[k]>=2)o.pon=true;
   if(c[k]>=3&&S.kans<4)o.kan=true;
-  if((from+1)%4===p&&k<27){
+  if(NP()===4&&(from+1)%4===p&&k<27){
     const n=k%9;
     if(n>=2&&c[k-2]&&c[k-1])o.chi.push([k-2,k-1]);
     if(n>=1&&n<=7&&c[k-1]&&c[k+1])o.chi.push([k-1,k+1]);
@@ -532,18 +541,21 @@ function callOptions(p,from,tile){
   return o;
 }
 
+function canKita(p){return NP()===3&&S.wall.length>0&&S.hands[p].some(t=>t.k===30);}
+function rinshanTile(){if(S.rin<4){const t=S.dead[S.rin++];S.wall.pop();return t;}return S.wall.pop();}
 function drawTile(p,rinshan){
   if(!rinshan&&S.wall.length===0)return ryuukyoku();
-  const t=rinshan?S.dead[S.kans-1]:S.wall.shift();
+  const t=rinshan?rinshanTile():S.wall.shift();
   S.rinshan=!!rinshan;
   S.hands[p].push(t); S.drawn[p]=t.id; S.turn=p; S.awaiting=null; S.kuikae[p]=[];
+  if(S.riichi[p]&&t.k===30&&canKita(p)&&!canTsumo(p)){render();return schedule('doKita',[p],500);}
   if(isActive(p)){
     const tw=canTsumo(p);
     if(S.riichi[p]){
       if(tw){S.awaiting={seat:p,type:'self',tsumo:tw,riichi:[],kans:[],locked:true,hint:'<em>ツモ</em>和了できます'};render();return;}
       render(); schedule('discard',[p,t.id,false],600); return;
     }
-    S.awaiting={seat:p,type:'self',tsumo:tw,riichi:riichiOptions(p),kans:selfKanOptions(p),
+    S.awaiting={seat:p,type:'self',tsumo:tw,riichi:riichiOptions(p),kans:selfKanOptions(p),kita:canKita(p),
       hint:tw?'<em>ツモ</em>和了できます':(rinshan?'嶺上牌を引きました。':'')+(HOVER?'捨てる牌をクリック':'牌をタップで選択、もう一度タップで捨てる')};
     render();
   }else{render();schedule('cpuAct',[p],600);}
@@ -563,9 +575,9 @@ function discard(p,id,decl){
 function claimTile(){const cl=S.claim;if(!cl)return null;return S.discards[cl.from].concat(S.melds[cl.from].flatMap(m=>m.tiles)).find(t=>t.id===cl.tid)||null;}
 function claimStep(){
   const cl=S.claim,from=cl.from,tile=claimTile();
-  const order=[1,2,3].map(i=>(from+i)%4);
+  const N=NP(),order=seats().slice(1).map(i=>(from+i)%N);
   if(cl.phase==='ron'){
-    for(;cl.i<3;cl.i++){
+    for(;cl.i<order.length;cl.i++){
       const o=order[cl.i];
       const r=canRon(o,tile,{chankan:cl.kind==='chankan'});
       if(!r){if(waitsP(o).includes(tile.k))S.furitenTemp[o]=true;continue;}
@@ -583,8 +595,8 @@ function claimStep(){
       if(opt.pon||opt.kan){cl.offered.push(o);S.awaiting={seat:o,type:'call',opt,hint:`${tileName(tile.k)} を鳴けます`};render();return;}
     }else if(opt.pon&&cpuWantsPon(o,tile))return doCall(o,'pon',null);
   }
-  const nx=(from+1)%4;
-  if(!cl.offered.includes(nx)){
+  const nx=(from+1)%N;
+  if(N===4&&!cl.offered.includes(nx)){
     const opt=callOptions(nx,from,tile);
     if(isActive(nx)){
       if(opt.chi.length){cl.offered.push(nx);S.awaiting={seat:nx,type:'call',opt:{pon:false,kan:false,chi:opt.chi},hint:`${tileName(tile.k)} をチーできます`};render();return;}
@@ -598,7 +610,7 @@ function doCall(p,type,pat){
   const d=S.discards[from]; d[d.length-1].called=true;
   let tiles;
   if(type==='chi')tiles=[tile,takeFrom(p,pat[0]),takeFrom(p,pat[1])];
-  else{tiles=[takeFrom(p,tile.k),takeFrom(p,tile.k)];if(type==='minkan')tiles.push(takeFrom(p,tile.k));const rel=(from-p+4)%4;tiles.splice(rel===3?0:rel===2?1:tiles.length,0,tile);}
+  else{tiles=[takeFrom(p,tile.k),takeFrom(p,tile.k)];if(type==='minkan')tiles.push(takeFrom(p,tile.k));const N=NP(),rel=(from-p+N)%N;tiles.splice(rel===N-1?0:(N===4&&rel===2)?1:tiles.length,0,tile);}
   const k=type==='chi'?Math.min(tile.k,pat[0]):tile.k;
   S.melds[p].push({type,k,tiles,from,calledId:tile.id});
   S.ippatsu=[false,false,false,false]; S.claim=null; S.turn=p; S.drawn[p]=null; S.awaiting=null;
@@ -624,12 +636,18 @@ function doSelfKan(p,opt){
   S.claim={from:p,tid:t.id,i:0,phase:'ron',kind:'chankan',offered:[]};
   render(); schedule('claimStep',[],500);
 }
-function afterKan(p){S.kans++;S.wall.pop();S.doraInd.push(S.dead[4+2*S.kans]);drawTile(p,true);}
+function afterKan(p){S.kans++;S.doraInd.push(S.dead[4+2*S.kans]);drawTile(p,true);}
+function doKita(p){
+  const h=S.hands[p];let i=h.findIndex(t=>t.k===30&&t.id===S.drawn[p]);if(i<0)i=h.findIndex(t=>t.k===30&&t.g);if(i<0)i=h.findIndex(t=>t.k===30);
+  const t=h.splice(i,1)[0]; S.kita[p].push(t); S.drawn[p]=null; S.awaiting=null;
+  S.msg=`<em>${pname(p)} 北抜き</em>`;
+  render(); schedule('drawTile',[p,true],450);
+}
 function passRon(){const seat=S.awaiting.seat;S.awaiting=null;S.furitenTemp[seat]=true;S.claim.i++;claimStep();}
 function settle(p,res,tsumo,from){
   const dealer=p===S.dealer,before=S.scores.slice(),hb=S.honba,pot=S.pot*1000;
   let total=0;
-  if(tsumo){for(let q=0;q<4;q++){if(q===p)continue;const pay=ceil100(res.base*(dealer||q===S.dealer?2:1))+hb*100;S.scores[q]-=pay;total+=pay;}}
+  if(tsumo){for(const q of seats()){if(q===p)continue;const pay=ceil100(res.base*(dealer||q===S.dealer?2:1))+hb*100;S.scores[q]-=pay;total+=pay;}}
   else{total=ceil100(res.base*(dealer?6:4))+hb*300;S.scores[from]-=total;}
   S.scores[p]+=total+pot; S.pot=0;
   return{before,total,pot};
@@ -647,17 +665,18 @@ function win(p,res,tsumo,from){
   S.phase='result'; S.awaiting=null; S.claim=null; render();
 }
 function ryuukyoku(){
-  const ten=[0,1,2,3].map(p=>shanten(handCounts(p),nm(p))===0);
+  const N=NP(),T=N===3?2000:3000;
+  const ten=[0,1,2,3].map(p=>p<N&&shanten(handCounts(p),nm(p))===0);
   const before=S.scores.slice(),n=ten.filter(Boolean).length;
-  if(n>0&&n<4)for(let p=0;p<4;p++)S.scores[p]+=ten[p]?3000/n:-3000/(4-n);
+  if(n>0&&n<N)for(const p of seats())S.scores[p]+=ten[p]?T/n:-T/(N-n);
   S.result={type:'draw',ten,before,after:S.scores.slice(),renchan:ten[S.dealer]};
   S.phase='result'; S.awaiting=null; S.claim=null; render();
 }
 function nextHand(){
   const r=S.result;
   if(r.renchan)S.honba++;
-  else{S.honba=r.type==='draw'?S.honba+1:0;S.dealer=(S.dealer+1)%4;S.handNo++;}
-  if(S.scores.some(s=>s<0)||S.handNo>4){S.phase='over';render();return;}
+  else{S.honba=r.type==='draw'?S.honba+1:0;S.dealer=(S.dealer+1)%NP();S.handNo++;}
+  if(seats().some(p=>S.scores[p]<0)||S.handNo>NP()){S.phase='over';render();return;}
   startHand();
 }
 
@@ -667,6 +686,7 @@ function visibleTo(p){
   for(const t of S.hands[p])v[t.k]++;
   for(const d of S.discards)for(const t of d)if(!t.called)v[t.k]++;
   for(const ms of S.melds)for(const m of ms)for(const t of m.tiles)v[t.k]++;
+  for(const ks of S.kita||[])for(const t of ks)v[t.k]++;
   for(const t of S.doraInd)v[t.k]++;
   for(let q=0;q<4;q++)if(q!==p)for(const t of S.hands[q])if(t.g)v[t.k]++;
   return v;
@@ -719,7 +739,7 @@ function cpuWantsPon(p,tile){if(S.riichi.some((r,i)=>r&&i!==p)&&shanten(handCoun
 function cpuWantsChi(p,tile,pat){if(S.riichi.some((r,i)=>r&&i!==p))return false;return cpuWantsCallShape(p,handCounts(p),{t:'chi',k:Math.min(tile.k,pat[0]),open:true,used:pat});}
 function tileValue(p,k){
   let v=isHonor(k)?(isYakuhaiFor(p,k)?1:0):isTerm(k)?1:(k%9===1||k%9===7)?2:3;
-  if(S.doraInd.some(t=>doraFrom(t.k)===k))v+=4;
+  if(S.doraInd.some(t=>doraOf(t.k)===k))v+=4;
   return v;
 }
 function cpuChoose(p){
@@ -751,6 +771,7 @@ function cpuChoose(p){
 }
 function cpuAct(p){
   const tw=canTsumo(p); if(tw)return win(p,tw,true,p);
+  if(canKita(p))return doKita(p);
   if(S.riichi[p])return discard(p,S.drawn[p],false);
   for(const o of selfKanOptions(p)){
     const c=handCounts(p),before=shanten(c,nm(p));
@@ -766,7 +787,7 @@ function resolveAsCpu(){
   if(aw.type==='ron')return win(p,aw.res,false,S.claim.from);
   return claimStep();
 }
-const FN={drawTile,discard,cpuAct,cpuDiscard,win,ryuukyoku,claimStep,afterKan};
+const FN={drawTile,discard,cpuAct,cpuDiscard,win,ryuukyoku,claimStep,afterKan,doKita};
 
 /* ---------- actions (validated on the host) ---------- */
 function discardAllowed(seat,id,rii){
@@ -782,6 +803,7 @@ function hostAction(seat,a,arg){
     case 'discard':{const id=Math.floor(num(arg&&arg.id,-1)),rii=!!(arg&&arg.riichi);if(aw.type==='self'&&!aw.locked&&discardAllowed(seat,id,rii))discard(seat,id,rii);break;}
     case 'tsumo':if(aw.type==='self'&&aw.tsumo)win(seat,aw.tsumo,true,seat);break;
     case 'kan':if(aw.type==='self'&&!aw.locked&&aw.kans[i])doSelfKan(seat,aw.kans[i]);break;
+    case 'kita':if(aw.type==='self'&&!aw.locked&&aw.kita&&canKita(seat))doKita(seat);break;
     case 'skipTsumo':if(aw.type==='self'&&aw.locked){S.awaiting=null;S.furitenTemp[seat]=true;discard(seat,S.drawn[seat],false);}break;
     case 'ron':if(aw.type==='ron')win(seat,aw.res,false,S.claim.from);break;
     case 'skipRon':if(aw.type==='ron')passRon();break;
@@ -838,7 +860,7 @@ function parseTables(peers){
     if(p.isMe&&p.sameTab)continue;
     const h=p.presence&&p.presence.hosting;
     if(!h||typeof h!=='object'||typeof h.code!=='string'||!/^[a-z0-9]{4}$/.test(h.code))continue;
-    out.push({code:h.code,nick:cleanNick(h.nick),n:Math.max(1,Math.min(4,Math.floor(num(h.n,1)))),st:!!h.st});
+    out.push({code:h.code,nick:cleanNick(h.nick),n:Math.max(1,Math.min(4,Math.floor(num(h.n,1)))),N:num(h.N,4)===3?3:4,st:!!h.st});
   }
   return out;
 }
@@ -850,11 +872,11 @@ function toWire(){
   return{code:NET.code,ep:NET.ep,seq:++NET.seq,ph:s.phase,sc:s.scores,dl:s.dealer,hn:s.handNo,hb:s.honba,pot:s.pot,wl:s.wall.length,
     dora:E(s.doraInd),ura:(s.phase==='result'||s.phase==='over')?E(s.uraInd):'',h:s.hands.map(E),dr:s.drawn,
     md:s.melds.map(ms=>ms.map(m=>[m.type,m.k,E(m.tiles),m.from,m.calledId??-1])),ds:s.discards.map(E),
-    dc:s.discards.map(d=>d.map((t,i)=>t.called?i:-1).filter(i=>i>=0)),ri:s.riichi,rx:s.riichiIdx,ip:s.ippatsu,fu:s.furitenTemp,kz:s.kuikae,
+    dc:s.discards.map(d=>d.map((t,i)=>t.called?i:-1).filter(i=>i>=0)),ri:s.riichi,rx:s.riichiIdx,ip:s.ippatsu,fu:s.furitenTemp,kz:s.kuikae,n:s.n,kt:(s.kita||[[],[],[],[]]).map(E),
     tn:s.turn,ld:s.lastDiscard,rs:s.rinshan,msg:String(s.msg||'').slice(0,200),aw:s.awaiting,rl:s.result,nm:s.names,hm:s.humans,cf:s.claim?[s.claim.from,s.claim.tid]:null,busy:!!s.next};
 }
 function fromWire(d){
-  const s=blankState(['lobby','play','result','over','closed'].includes(d.ph)?d.ph:'lobby');
+  const s=blankState(['lobby','play','result','over','closed'].includes(d.ph)?d.ph:'lobby',d.n===3?3:4);
   const arr4=(a,f)=>[0,1,2,3].map(i=>f(Array.isArray(a)?a[i]:undefined));
   s.scores=arr4(d.sc,x=>num(x,25000)); s.dealer=clampSeat(d.dl); s.handNo=num(d.hn,1); s.honba=num(d.hb); s.pot=num(d.pot);
   s.wall=new Array(Math.max(0,Math.min(136,Math.floor(num(d.wl))))).fill(null);
@@ -863,7 +885,7 @@ function fromWire(d){
   s.discards=arr4(d.ds,D); const dc=arr4(d.dc,x=>Array.isArray(x)?x:[]);
   s.discards.forEach((ds,p)=>dc[p].forEach(i=>{if(ds[i])ds[i].called=true;}));
   s.riichi=arr4(d.ri,Boolean); s.riichiIdx=arr4(d.rx,x=>num(x,-1)); s.ippatsu=arr4(d.ip,Boolean); s.furitenTemp=arr4(d.fu,Boolean);
-  s.kuikae=arr4(d.kz,x=>Array.isArray(x)?x.map(clampK):[]);
+  s.kuikae=arr4(d.kz,x=>Array.isArray(x)?x.map(clampK):[]); s.kita=arr4(d.kt,D);
   s.turn=clampSeat(d.tn); s.lastDiscard=d.ld==null?null:num(d.ld); s.rinshan=!!d.rs; s.msg=String(d.msg||'');
   s.awaiting=d.aw&&typeof d.aw==='object'?sanitizeAw(d.aw):null; s.result=d.rl&&typeof d.rl==='object'?d.rl:null;
   s.names=arr4(d.nm,x=>x==null?null:cleanNick(x)); s.humans=arr4(d.hm,x=>typeof x==='string'?x:null);
@@ -876,7 +898,7 @@ function sanitizeAw(a){
   return{seat:clampSeat(a.seat),type:['self','ron','call'].includes(a.type)?a.type:'self',tsumo:a.tsumo||null,res:a.res||null,locked:!!a.locked,
     riichi:Array.isArray(a.riichi)?a.riichi.map(Number):[],kans:Array.isArray(a.kans)?a.kans.map(o=>({kind:o&&o.kind==='ankan'?'ankan':'kakan',k:clampK(o&&o.k)})):[],
     opt:a.opt&&typeof a.opt==='object'?{pon:!!a.opt.pon,kan:!!a.opt.kan,chi:Array.isArray(a.opt.chi)?a.opt.chi.slice(0,3).map(p=>[clampK(p[0]),clampK(p[1])]):[]}:{pon:false,kan:false,chi:[]},
-    hint:String(a.hint||'').slice(0,80)};
+    kita:!!a.kita,hint:String(a.hint||'').slice(0,80)};
 }
 function wireTable(){
   const t=NET.tr,die=()=>{NET.conn=false;render();};
@@ -904,7 +926,7 @@ function wireTable(){
 function handleAct(id,d){
   const a=String(d.a||'');
   if(a==='sit'){
-    if(S.phase==='lobby'&&!S.humans.includes(id)){const i=S.humans.findIndex((h,j)=>j>0&&!h);if(i>0){S.humans[i]=id;S.names[i]=cleanNick(d.nick);}}
+    if(S.phase==='lobby'&&!S.humans.includes(id)){const i=S.humans.findIndex((h,j)=>j>0&&j<NP()&&!h);if(i>0){S.humans[i]=id;S.names[i]=cleanNick(d.nick);}}
     else if(S.phase==='lobby'){S.names[S.humans.indexOf(id)]=cleanNick(d.nick);}
     render(); broadcastNow(); return;
   }
@@ -929,7 +951,7 @@ function broadcastNow(){
 function queueBroadcast(){if(NET.mode!=='host')return;clearTimeout(NET.bcTimer);NET.bcTimer=setTimeout(broadcastNow,40);}
 function advertise(){
   if(NET.mode!=='host'||!NET.api)return;
-  const ad={code:NET.code,nick:NET.nick,n:S.humans.filter(Boolean).length,st:S.phase!=='lobby'};
+  const ad={code:NET.code,nick:NET.nick,n:S.humans.filter(Boolean).length,N:NP(),st:S.phase!=='lobby'};
   const key=JSON.stringify(ad); if(key===NET.lastAd)return; NET.lastAd=key;
   NET.api.presence({hosting:ad}).catch(()=>{});
 }
@@ -970,7 +992,7 @@ function applyState(d){
   NET.gotEp=d.ep; NET.gotSeq=d.seq; S=ns;
   const seat=S.humans.indexOf(NET.cid);
   ME=seat>=0?seat:0; SPECT=seat<0&&S.phase!=='lobby';
-  if(S.phase==='lobby'&&seat<0&&Date.now()-NET.lastSit>2500&&S.humans.some((h,i)=>i>0&&!h)){NET.lastSit=Date.now();netSend({a:'sit',nick:NET.nick});}
+  if(S.phase==='lobby'&&seat<0&&Date.now()-NET.lastSit>2500&&S.humans.some((h,i)=>i>0&&i<NP()&&!h)){NET.lastSit=Date.now();netSend({a:'sit',nick:NET.nick});}
   UI.pending=false; if(!myAw())UI.riichiMode=false;
   render();
 }
@@ -984,14 +1006,14 @@ function leaveNet(){
 }
 function startNet(){
   if(NET.mode!=='host'||S.phase!=='lobby')return;
-  let c=0; const names=S.names.map((n,i)=>S.humans[i]?n:'CPU'+(++c));
+  let c=0; const N=NP(); const names=S.names.map((n,i)=>i>=N?null:S.humans[i]?n:'CPU'+(++c));
   const humans=S.humans.slice();
-  initGame(names,humans); advertise();
+  initGame(names,humans,N); advertise();
 }
 function againNet(){
   if(NET.mode!=='host')return;
   const humans=S.humans.slice(),names=S.names.map((n,i)=>humans[i]?n:null);
-  clearTimeout(timer); S=blankState('lobby'); S.humans=humans; S.names=names; render(); advertise();
+  clearTimeout(timer); S=blankState('lobby',NP()); S.humans=humans; S.names=names; render(); advertise();
 }
 
 /* ---------- rendering ---------- */
@@ -1003,7 +1025,10 @@ function riverHTML(p){
   const el=(t,i)=>tileEl(t,[i===S.riichiIdx[p]?'side':'',t.called?'called':'',t.id===S.lastDiscard&&i===d.length-1&&!t.called?'last':''].join(' '));
   return [[0,6],[6,12],[12,99]].map(([a,b])=>`<div class="rrow">${d.slice(a,b).map((t,j)=>el(t,a+j)).join('')}</div>`).join('');
 }
-function meldsHTML(p){return S.melds[p].map(m=>`<div class="meld">${m.tiles.map(t=>tileEl(t,t.id===m.calledId?'side':'')).join('')}</div>`).join('');}
+function meldsHTML(p){
+  const k=S.kita&&S.kita[p]&&S.kita[p].length?`<div class="meld" title="抜きドラ">${S.kita[p].map(t=>tileEl(t)).join('')}</div>`:'';
+  return S.melds[p].map(m=>`<div class="meld">${m.tiles.map(t=>tileEl(t,t.id===m.calledId?'side':'')).join('')}</div>`).join('')+k;
+}
 function concealedHTML(p){
   const h=S.hands[p],drawn=S.drawn[p];
   const main=h.filter(t=>t.id!==drawn),d=h.find(t=>t.id===drawn);
@@ -1067,6 +1092,7 @@ function actionsHTML(){
   else{
     if(aw.riichi.length)s+=`<button class="btn red" data-a="riichi">リーチ</button>`;
     aw.kans.forEach((o,i)=>{s+=`<button class="btn" data-a="kan" data-arg="${i}">${o.kind==='ankan'?'暗槓':'加槓'} ${miniTiles([o.k])}</button>`;});
+    if(aw.kita)s+=`<button class="btn" data-a="kita">北抜き ${miniTiles([30])}</button>`;
   }
   return s||'<span class="hint">あなたの番です</span>';
 }
@@ -1079,7 +1105,8 @@ function render(){
   $('doraInd').innerHTML=S.doraInd.map(t=>tileEl(t)).join('');
   $('wallCount').textContent=S.wall.length;
   $('potLabel').textContent=S.pot;
-  for(let p=0;p<4;p++){const f=(p-ME+4)%4;$('f'+f).innerHTML=inGame?frameHTML(p,f!==0||SPECT):'';}
+  for(let f=0;f<4;f++)$('f'+f).innerHTML='';
+  if(inGame)for(const p of seats()){const f=frameOf(p);$('f'+f).innerHTML=frameHTML(p,f!==0||SPECT);}
   $('myFuri').hidden=!(inGame&&!SPECT&&isFuriten(ME));
   $('myHand').innerHTML=inGame&&!SPECT?myHandHTML():'';
   $('myStatus').innerHTML=inGame&&(UI.assist||SPECT)?statusHTML():'';
@@ -1099,7 +1126,7 @@ function handRow(p,winId){
 }
 function scoreTable(r){
   const before=Array.isArray(r.before)?r.before:S.scores,after=Array.isArray(r.after)?r.after:S.scores;
-  const order=[0,1,2,3].sort((a,b)=>num(after[b])-num(after[a]));
+  const order=seats().sort((a,b)=>num(after[b])-num(after[a]));
   return `<div class="scores">${order.map((p,i)=>{const d=num(after[p])-num(before[p]);return `<span>${i+1}位</span><span class="nm">${esc(label(p))}</span><span class="${d>0?'up':d<0?'down':''}">${d>0?'+':''}${d?fmt(d):''}</span><span>${fmt(after[p])}</span>`;}).join('')}</div>`;
 }
 function rulesHTML(){
@@ -1108,6 +1135,8 @@ function rulesHTML(){
   <div class="legend"><span>${tileEl({k:4,g:true})} 硝子牌（他家から見える）</span><span>${tileEl({k:4,g:false})} 不透明牌（見えない）</span><span>${backEl()} 他家の不透明牌</span></div>
   <h3>対局</h3>
   <ul><li>4人打ち東風戦4局、持ち点25,000点。ひとりならCPU3人と、友達と対局なら空席にCPUが入ります。</li><li>ポン・チー・カン（明槓・暗槓・加槓）あり。喰いタン・後付けあり、喰い替えなし。カンドラは即乗り、嶺上開花・槍槓あり。</li><li>手牌は種類順に並ぶので、伏せ牌の<b>位置</b>からも中身を推理できます。鳴くときは透明な牌から晒し、不透明牌は手の内に残ります。</li><li>CPUもあなたの硝子牌を見て、危険牌を避けたり残り枚数を数えたりします。</li></ul>
+  <h3>三人打ち</h3>
+  <ul><li>萬子の二〜八を抜いた108枚。チーなし。持ち点35,000点の東風戦3局。</li><li>北は<b>北抜き</b>で抜きドラに（1枚1翻、嶺上牌を補充）。リーチ中に引いた北は自動で抜きます。</li><li>ツモ損あり（ツモ和了は2人から受け取り）。ドラ表示が一萬なら九萬、九萬なら一萬がドラ。ノーテン罰符は2,000点。</li></ul>
   <h3>和了と点数</h3>
   <ul><li>通常の役・翻・符で計算。鳴くと門前役は消え、三色・一通・チャンタ・染め手は喰い下がり。</li><li>ロンには役が必要。フリテンあり。ダブロンなし（上家取り）。</li><li>流局時はノーテン罰符3,000点。親が和了か聴牌なら連荘。誰かが0点未満で終了。</li></ul>
   <h3>操作</h3>
@@ -1116,11 +1145,16 @@ function rulesHTML(){
 function tableListHTML(){
   if(!NET.api)return '<span class="hint">通信の準備中…</span>';
   if(!NET.tables.length)return '<span class="hint">今は開いている卓がありません。</span>';
-  return NET.tables.map(t=>`<div class="trow"><span class="code">${esc(t.code)}</span><span class="who">${esc(t.nick)}の卓 · ${t.n}/4人${t.st?' · 対局中':''}</span><button class="btn" data-o="joinT" data-code="${esc(t.code)}">${t.st?'入る':'参加'}</button></div>`).join('');
+  return NET.tables.map(t=>`<div class="trow"><span class="code">${esc(t.code)}</span><span class="who">${esc(t.nick)}の卓 · ${t.N===3?'三麻':'四麻'} ${t.n}/${t.N}人${t.st?' · 対局中':''}</span><button class="btn" data-o="joinT" data-code="${esc(t.code)}">${t.st?'入る':'参加'}</button></div>`).join('');
 }
 function updateTableList(){const e=$('tlist');if(e)e.innerHTML=tableListHTML();}
+function setMode(n){
+  if(NET.mode!=='host'||S.phase!=='lobby')return;
+  if(n===3&&S.humans[3]){NET.err='北家の席に人がいるため三人打ちにできません。';render();return;}
+  NET.err=''; S.n=n; S.scores=[0,1,2,3].map(()=>n===3?35000:25000); render(); advertise();
+}
 function seatsHTML(){
-  return `<div class="seats">${[0,1,2,3].map(i=>{const h=S.humans[i];const me=h&&h===NET.cid;return `<div class="seatc ${h?'':'cpu'} ${me?'me':''}"><span class="w">${WIND_CH[i]}</span><span class="n">${h?esc(S.names[i]||'ゲスト')+(me?'（あなた）':'')+(i===0?' · ホスト':''):'CPU'}</span></div>`;}).join('')}</div>`;
+  return `<div class="seats">${seats().map(i=>{const h=S.humans[i];const me=h&&h===NET.cid;return `<div class="seatc ${h?'':'cpu'} ${me?'me':''}"><span class="w">${WIND_CH[i]}</span><span class="n">${h?esc(S.names[i]||'ゲスト')+(me?'（あなた）':'')+(i===0?' · ホスト':''):'CPU'}</span></div>`;}).join('')}</div>`;
 }
 function renderOverlay(){
   const ov=$('overlay'),pn=$('panel');
@@ -1131,7 +1165,7 @@ function renderOverlay(){
     let resume='';
     try{const h=JSON.parse(lsGet('glass-host')||'null');if(h&&h.code)resume+=`<button class="btn" data-o="resumeHost">卓 ${esc(h.code)} を再開（ホスト）</button>`;}catch(e){}
     const g=lsGet('glass-guest'); if(g&&/^[a-z0-9]{4}$/.test(g))resume+=`<button class="btn" data-o="rejoin">卓 ${esc(g)} に戻る</button>`;
-    const btns=`<div class="actions"><button class="btn primary" data-o="solo">ひとりで対局</button><button class="btn primary" data-o="net">友達と対局</button>${resume}</div>`;
+    const btns=`<div class="actions"><button class="btn primary" data-o="solo">ひとりで四麻</button><button class="btn primary" data-o="solo3">ひとりで三麻</button><button class="btn primary" data-o="net">友達と対局</button>${resume}</div>`;
     html=`<h2>硝子牌麻雀<small>Glass Tile Mahjong</small></h2>${btns}${rulesHTML()}${btns}`;
   }
   else if(S.phase==='netmenu'){
@@ -1151,7 +1185,7 @@ function renderOverlay(){
     const host=NET.mode==='host',seated=S.humans.includes(NET.cid);
     html=`<h2>卓<small>コード</small> <span class="bigcode">${esc(NET.code)}</span></h2>
     <p class="lead">${host?'友達に卓コードを伝えるか、「友達と対局」の一覧から参加してもらってください。空いた席にはCPUが入ります。':seated?'ホストが対局を始めるのを待っています。':'満席のため観戦になります。'}</p>
-    ${seatsHTML()}${err}
+    ${host?`<div class="actions"><button class="ghost" data-o="mode4" aria-pressed="${NP()===4}">四人打ち</button><button class="ghost" data-o="mode3" aria-pressed="${NP()===3}">三人打ち</button></div>`:`<p class="lead">${NP()===3?'三人打ち':'四人打ち'}</p>`}${seatsHTML()}${err}
     <div class="actions">${host?'<button class="btn primary" data-o="startNet">対局開始</button><button class="btn" data-o="leaveNet">卓を閉じる</button>':'<button class="btn" data-o="leaveNet">退出</button>'}</div>`;
   }
   else if(S.phase==='result'&&S.result){
@@ -1166,14 +1200,14 @@ function renderOverlay(){
       ${scoreTable(r)}`;
     }else{
       const ten=Array.isArray(r.ten)?r.ten:[];
-      html=`<h2>流局<small>${[0,1,2,3].map(p=>`${esc(label(p))} ${ten[p]?'聴牌':'ノーテン'}`).join(' / ')}</small></h2>${scoreTable(r)}`;
+      html=`<h2>流局<small>${seats().map(p=>`${esc(label(p))} ${ten[p]?'聴牌':'ノーテン'}`).join(' / ')}</small></h2>${scoreTable(r)}`;
     }
-    const end=S.scores.some(s=>s<0)||(!r.renchan&&S.handNo>=4);
+    const end=seats().some(p=>S.scores[p]<0)||(!r.renchan&&S.handNo>=NP());
     html+=NET.mode==='guest'?'<p class="lead">ホストが次へ進めるのを待っています。</p>':`<div class="actions"><button class="btn primary" data-o="next">${end?'最終結果へ':'次の局へ'}</button></div>`;
   }else if(S.phase==='over'){
-    const order=[0,1,2,3].sort((a,b)=>S.scores[b]-S.scores[a]);
+    const order=seats().sort((a,b)=>S.scores[b]-S.scores[a]);
     const rank=order.indexOf(ME)+1;
-    const btns=NET.mode==='solo'?'<button class="btn primary" data-o="solo">もう一度</button><button class="btn" data-o="back">タイトルへ</button>'
+    const btns=NET.mode==='solo'?'<button class="btn primary" data-o="'+(NP()===3?'solo3':'solo')+'">もう一度</button><button class="btn" data-o="back">タイトルへ</button>'
       :NET.mode==='host'?'<button class="btn primary" data-o="again">同じ卓でもう一度</button><button class="btn" data-o="leaveNet">卓を閉じる</button>'
       :'<p class="lead">ホストが次の対局を始めるのを待っています。</p><button class="btn" data-o="leaveNet">退出</button>';
     html=`<h2>${SPECT?'終局':rank+'位'}<small>東風戦 終了</small></h2>
@@ -1199,7 +1233,9 @@ $('panel').addEventListener('click',e=>{
   const b=e.target.closest('[data-o]'); if(!b)return;
   const o=b.dataset.o;
   if(o==='closeHelp'){UI.help=false;render();}
-  else if(o==='solo'){UI.help=false;newSolo();}
+  else if(o==='solo'){UI.help=false;newSolo(4);}
+  else if(o==='solo3'){UI.help=false;newSolo(3);}
+  else if(o==='mode3'||o==='mode4'){setMode(o==='mode3'?3:4);}
   else if(o==='net'){NET.err='';S=blankState('netmenu');render();netReady().then(()=>{if(S.phase==='netmenu'){const ni=$('nickIn');if(ni&&!ni.value&&NET.nick)ni.value=NET.nick;updateTableList();}});}
   else if(o==='back'){NET.err='';S=blankState('title');render();}
   else if(o==='host'){if(!NET.nick){NET.err='表示名を入力してください。';$('panel').dataset.view='';render();return;}hostTable(false);}
