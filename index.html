@@ -572,7 +572,7 @@ function discard(p,id,decl){
   S.claim={from:p,tid:t.id,i:0,phase:'ron',kind:'discard',offered:[]};
   render(); schedule('claimStep',[],300);
 }
-function claimTile(){const cl=S.claim;if(!cl)return null;return S.discards[cl.from].concat(S.melds[cl.from].flatMap(m=>m.tiles)).find(t=>t.id===cl.tid)||null;}
+function claimTile(){const cl=S.claim;if(!cl)return null;return S.discards[cl.from].concat(S.melds[cl.from].flatMap(m=>m.tiles),(S.kita&&S.kita[cl.from])||[]).find(t=>t.id===cl.tid)||null;}
 function claimStep(){
   const cl=S.claim,from=cl.from,tile=claimTile();
   const N=NP(),order=seats().slice(1).map(i=>(from+i)%N);
@@ -581,10 +581,11 @@ function claimStep(){
       const o=order[cl.i];
       const r=canRon(o,tile,{chankan:cl.kind==='chankan'});
       if(!r){if(waitsP(o).includes(tile.k))S.furitenTemp[o]=true;continue;}
-      if(isActive(o)){S.awaiting={seat:o,type:'ron',res:r,hint:`${tileName(tile.k)} で<em>ロン</em>できます`};render();return;}
+      if(isActive(o)){S.awaiting={seat:o,type:'ron',res:r,hint:`${cl.kind==='kita'?'抜き北':tileName(tile.k)} で<em>ロン</em>できます`};render();return;}
       return win(o,r,false,from);
     }
     if(cl.kind==='chankan'){S.claim=null;return afterKan(from);}
+    if(cl.kind==='kita'){S.claim=null;render();return schedule('drawTile',[from,true],300);}
     cl.phase='call';
   }
   if(S.wall.length===0){render();return schedule('ryuukyoku',[],600);}
@@ -639,15 +640,20 @@ function doSelfKan(p,opt){
 function afterKan(p){S.kans++;S.doraInd.push(S.dead[4+2*S.kans]);drawTile(p,true);}
 function doKita(p){
   const h=S.hands[p];let i=h.findIndex(t=>t.k===30&&t.id===S.drawn[p]);if(i<0)i=h.findIndex(t=>t.k===30&&t.g);if(i<0)i=h.findIndex(t=>t.k===30);
-  const t=h.splice(i,1)[0]; S.kita[p].push(t); S.drawn[p]=null; S.awaiting=null;
+  const t=h.splice(i,1)[0]; S.kita[p].push(t); S.drawn[p]=null; S.awaiting=null; sortHand(p);
   S.msg=`<em>${pname(p)} 北抜き</em>`;
-  render(); schedule('drawTile',[p,true],450);
+  // 抜いた北はロンできる（槍槓は付かない）
+  S.claim={from:p,tid:t.id,i:0,phase:'ron',kind:'kita',offered:[]};
+  render(); schedule('claimStep',[],450);
 }
 function passRon(){const seat=S.awaiting.seat;S.awaiting=null;S.furitenTemp[seat]=true;S.claim.i++;claimStep();}
 function settle(p,res,tsumo,from){
   const dealer=p===S.dealer,before=S.scores.slice(),hb=S.honba,pot=S.pot*1000;
   let total=0;
-  if(tsumo){for(const q of seats()){if(q===p)continue;const pay=ceil100(res.base*(dealer||q===S.dealer?2:1))+hb*100;S.scores[q]-=pay;total+=pay;}}
+  if(tsumo){for(const q of seats()){if(q===p)continue;
+    // 三麻は折半: 北家の分を残り2人で半分ずつ負担（親 2.5倍・子 1.5倍、親ツモは子が3倍ずつ）
+    const mult=NP()===3?(dealer?3:q===S.dealer?2.5:1.5):(dealer||q===S.dealer?2:1);
+    const pay=ceil100(res.base*mult)+hb*(NP()===3?150:100);S.scores[q]-=pay;total+=pay;}}
   else{total=ceil100(res.base*(dealer?6:4))+hb*300;S.scores[from]-=total;}
   S.scores[p]+=total+pot; S.pot=0;
   return{before,total,pot};
@@ -657,6 +663,7 @@ function win(p,res,tsumo,from){
   if(!tsumo){
     const t=claimTile();
     if(S.claim&&S.claim.kind==='chankan'){const m=S.melds[from].find(m=>m.tiles.some(x=>x.id===t.id));m.tiles=m.tiles.filter(x=>x.id!==t.id);m.type='pon';}
+    else if(S.claim&&S.claim.kind==='kita'){S.kita[from]=S.kita[from].filter(x=>x.id!==t.id);}
     else S.discards[from].pop();
     S.hands[p].push(t); winId=t.id;
   }
@@ -1136,7 +1143,7 @@ function rulesHTML(){
   <h3>対局</h3>
   <ul><li>4人打ち東風戦4局、持ち点25,000点。ひとりならCPU3人と、友達と対局なら空席にCPUが入ります。</li><li>ポン・チー・カン（明槓・暗槓・加槓）あり。喰いタン・後付けあり、喰い替えなし。カンドラは即乗り、嶺上開花・槍槓あり。</li><li>手牌は種類順に並ぶので、伏せ牌の<b>位置</b>からも中身を推理できます。鳴くときは透明な牌から晒し、不透明牌は手の内に残ります。</li><li>CPUもあなたの硝子牌を見て、危険牌を避けたり残り枚数を数えたりします。</li></ul>
   <h3>三人打ち</h3>
-  <ul><li>萬子の二〜八を抜いた108枚。チーなし。持ち点35,000点の東風戦3局。</li><li>北は<b>北抜き</b>で抜きドラに（1枚1翻、嶺上牌を補充）。リーチ中に引いた北は自動で抜きます。</li><li>ツモ損あり（ツモ和了は2人から受け取り）。ドラ表示が一萬なら九萬、九萬なら一萬がドラ。ノーテン罰符は2,000点。</li></ul>
+  <ul><li>萬子の二〜八を抜いた108枚。チーなし。持ち点35,000点の東風戦3局。</li><li>北は<b>北抜き</b>で抜きドラに（1枚1翻、嶺上牌を補充）。リーチ中に引いた北は自動で抜きます。</li><li>抜いた北でロン和了できます（槍槓は付きません）。</li><li>ツモ損なしの<b>折半</b>：子のツモは北家の分を親子で半分ずつ負担（例：満貫8,000は親5,000・子3,000）。親のツモは子が満貫なら6,000ずつ。</li><li>ドラ表示が一萬なら九萬、九萬なら一萬がドラ。ノーテン罰符は2,000点。</li></ul>
   <h3>和了と点数</h3>
   <ul><li>通常の役・翻・符で計算。鳴くと門前役は消え、三色・一通・チャンタ・染め手は喰い下がり。</li><li>ロンには役が必要。フリテンあり。ダブロンなし（上家取り）。</li><li>流局時はノーテン罰符3,000点。親が和了か聴牌なら連荘。誰かが0点未満で終了。</li></ul>
   <h3>操作</h3>
