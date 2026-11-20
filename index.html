@@ -133,6 +133,7 @@ button{font-family:inherit; color:inherit}
 .tile.side{transform:rotate(-90deg); margin-inline:calc(var(--w)*.18)}
 .tile.called{opacity:.3}
 .tile.win{outline:2px solid #E5534B; outline-offset:2px}
+.tile.glass.aka{background:linear-gradient(160deg, rgba(255,236,236,.85), rgba(232,170,170,.55) 55%, rgba(250,220,220,.72))}
 .tm{font-family:var(--f-display); font-weight:800; fill:var(--ink)}
 .tr{font-family:var(--f-display); font-weight:800; fill:var(--t-red)}
 .th{font-family:var(--f-display); font-weight:800}
@@ -332,9 +333,11 @@ function evaluate(c,win,ctx,fixed=[]){
       let dora=0;for(const d of ctx.dora)dora+=all[d]+(d===30?nuki:0);
       if(dora)yaku.push(['ドラ',dora]);
       if(nuki)yaku.push(['抜きドラ',nuki]);
+      const aka=ctx.aka||0;
+      if(aka)yaku.push(['赤ドラ',aka]);
       let ura=0;if(ctx.riichi)for(const d of ctx.ura)ura+=all[d]+(d===30?nuki:0);
       if(ura)yaku.push(['裏ドラ',ura]);
-      const han=yh+dora+ura+nuki; const [base,label]=limitOf(han,f.fu);
+      const han=yh+dora+ura+nuki+aka; const [base,label]=limitOf(han,f.fu);
       r={yaku,han,fu:f.fu,base,label,yakuman:false};
     }
     if(!best||r.base>best.base||(r.base===best.base&&r.han>best.han))best=r;
@@ -398,12 +401,13 @@ const ceil100=x=>Math.ceil(x/100)*100;
 const FACE={};
 function pin(cx,cy,r,col){return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="${r*.28}"/><circle cx="${cx}" cy="${cy}" r="${r*.42}" fill="${col}"/>`;}
 function stick(cx,cy,h,col){return `<rect x="${cx-3.6}" y="${cy-h/2}" width="7.2" height="${h}" rx="3.6" fill="${col}"/><line x1="${cx-3.6}" x2="${cx+3.6}" y1="${cy}" y2="${cy}" stroke="#F6F0E0" stroke-width="1.4"/>`;}
-function faceSVG(k){
-  k=clampK(k);
-  if(FACE[k])return FACE[k];
+function faceSVG(k,red){
+  k=clampK(k); red=!!red&&k<27&&k%9===4;
+  const key=red?k+'r':k;
+  if(FACE[key])return FACE[key];
   const s=suitOf(k),n=k%9+1; let g='';
-  const R='var(--t-red)',G='var(--t-green)',B='var(--t-blue)';
-  if(s===0){g=`<text x="30" y="35" font-size="27" text-anchor="middle" class="tm">${KNUM[n-1]}</text><text x="30" y="70" font-size="27" text-anchor="middle" class="tr">萬</text>`;}
+  const R='var(--t-red)',G=red?R:'var(--t-green)',B=red?R:'var(--t-blue)';
+  if(s===0){g=`<text x="30" y="35" font-size="27" text-anchor="middle" class="${red?'tr':'tm'}">${KNUM[n-1]}</text><text x="30" y="70" font-size="27" text-anchor="middle" class="tr">萬</text>`;}
   else if(s===1){
     const L={1:[[30,40,17,R]],2:[[30,22,11,G],[30,58,11,B]],3:[[15,17,9,B],[30,40,9,R],[45,63,9,G]],
       4:[[18,22,10,B],[42,22,10,G],[18,58,10,G],[42,58,10,B]],5:[[17,19,9,B],[43,19,9,G],[30,40,9,R],[17,61,9,G],[43,61,9,B]],
@@ -427,7 +431,7 @@ function faceSVG(k){
     if(h===4)g=`<rect x="13" y="16" width="34" height="48" rx="3" fill="none" stroke="${B}" stroke-width="3"/>`;
     else g=`<text x="30" y="55" font-size="38" text-anchor="middle" class="th" fill="${h===5?G:h===6?R:'var(--ink)'}">${HONOR[h]}</text>`;
   }
-  return FACE[k]=`<svg viewBox="0 0 60 80" aria-hidden="true">${g}</svg>`;
+  return FACE[key]=`<svg viewBox="0 0 60 80" aria-hidden="true">${g}</svg>`;
 }
 
 /* ---------- helpers ---------- */
@@ -444,13 +448,13 @@ const HOVER=window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
 /* ---------- game state ---------- */
 let S=null, timer=null, ME=0, SPECT=false;
-const UI={view:false,assist:true,help:false,sel:null,riichiMode:false,pending:false};
-try{const u=JSON.parse(lsGet('glass-ui')||'{}');if(typeof u.assist==='boolean')UI.assist=u.assist;}catch(e){}
-function saveUI(){lsSet('glass-ui',JSON.stringify({assist:UI.assist}));}
+const UI={view:false,assist:true,help:false,sel:null,riichiMode:false,pending:false,aka:1};
+try{const u=JSON.parse(lsGet('glass-ui')||'{}');if(typeof u.assist==='boolean')UI.assist=u.assist;if([0,1,2].includes(u.aka))UI.aka=u.aka;}catch(e){}
+function saveUI(){lsSet('glass-ui',JSON.stringify({assist:UI.assist,aka:UI.aka}));}
 
 function blankState(phase,n=4){
   const z=v=>[v,v,v,v];
-  return{phase:phase||'title',n,scores:z(n===3?35000:25000),kita:[[],[],[],[]],rin:0,dealer:0,handNo:1,honba:0,pot:0,hands:[[],[],[],[]],melds:[[],[],[],[]],discards:[[],[],[],[]],
+  return{phase:phase||'title',n,aka:UI.aka,akaIds:[],scores:z(n===3?35000:25000),kita:[[],[],[],[]],rin:0,dealer:0,handNo:1,honba:0,pot:0,hands:[[],[],[],[]],melds:[[],[],[],[]],discards:[[],[],[],[]],
     riichi:z(false),riichiIdx:z(-1),ippatsu:z(false),doraInd:[],uraInd:[],wall:[],dead:[],drawn:z(null),furitenTemp:z(false),kuikae:[[],[],[],[]],
     names:null,humans:['local',null,null,null],awaiting:null,result:null,claim:null,msg:'',turn:0,kans:0,rinshan:false,lastDiscard:null,next:null};
 }
@@ -462,6 +466,14 @@ function frameOf(p){const r=relOf(p);return NP()===3?[0,1,3][r]:r;}
 function pname(p){return S.names&&S.names[p]?S.names[p]:relName(p);}
 function label(p){if(!SPECT&&p===ME)return 'あなた';return S.names&&S.names[p]?S.names[p]:relName(relOf(p));}
 const seats=()=>[0,1,2,3].slice(0,NP());
+function akaIdsFor(n,level){
+  if(!level)return[];
+  if(n===3)return level===2?[52,53,88,89]:[52,88];
+  return level===2?[16,52,53,88]:[16,52,88];
+}
+function akaCount(p){let c=0;for(const t of S.hands[p])if(t.r)c++;for(const m of S.melds[p])for(const t of m.tiles)if(t.r)c++;return c;}
+const AKA_LABEL=['なし','標準','多め'];
+function akaDesc(n,level){return level?`${AKA_LABEL[level]}（${akaIdsFor(n,level).length}枚）`:'なし';}
 function doraOf(i){return S.n===3&&i<9?(i===0?8:0):doraFrom(i);}
 function isActive(p){
   const h=S.humans&&S.humans[p]; if(!h)return false;
@@ -473,17 +485,18 @@ function sortHand(p){S.hands[p].sort((a,b)=>a.k-b.k||(a.g===b.g?a.id-b.id:(a.g?1
 const fixedOf=p=>S.melds[p].map(m=>({t:m.type==='chi'?'chi':'pon',k:m.k,open:m.type!=='ankan',kan:/kan/.test(m.type)}));
 function ctxFor(p,tsumo,extra={}){
   return Object.assign({tsumo,riichi:S.riichi[p],ippatsu:S.ippatsu[p],last:!S.rinshan&&S.wall.length===0,rinshan:false,chankan:false,
-    seat:seatWind(p),round:27,dora:S.doraInd.map(t=>doraOf(t.k)),ura:S.uraInd.slice(0,S.doraInd.length).map(t=>doraOf(t.k)),nuki:(S.kita&&S.kita[p]||[]).length},extra);
+    seat:seatWind(p),round:27,dora:S.doraInd.map(t=>doraOf(t.k)),ura:S.uraInd.slice(0,S.doraInd.length).map(t=>doraOf(t.k)),nuki:(S.kita&&S.kita[p]||[]).length,aka:akaCount(p)},extra);
 }
 function schedule(fn,args,delay){S.next={fn,args};clearTimeout(timer);timer=setTimeout(()=>{const n=S.next;S.next=null;if(n&&FN[n.fn])FN[n.fn](...n.args);},delay);}
 
-function initGame(names,humans,n=4){
-  S=blankState('play',n); S.names=names; S.humans=humans;
+function initGame(names,humans,n=4,aka=UI.aka){
+  S=blankState('play',n); S.names=names; S.humans=humans; S.aka=aka;
   startHand();
 }
 function newSolo(n=4){NET.mode='solo';ME=0;SPECT=false;initGame(null,['local',null,null,null],n);}
 function startHand(){
-  const tiles=shuffle(makeTiles(S.n===3));
+  S.akaIds=akaIdsFor(S.n,S.aka);
+  const tiles=shuffle(makeTiles(S.n===3)); for(const t of tiles)if(S.akaIds.includes(t.id))t.r=true;
   S.dead=tiles.splice(0,14); S.rin=0;
   S.doraInd=[S.dead[4]]; S.uraInd=[S.dead[5],S.dead[7],S.dead[9],S.dead[11],S.dead[13]];
   S.hands=[[],[],[],[]];
@@ -511,7 +524,7 @@ function canTsumo(p){
 function canRon(p,tile,extra={}){
   const w=waitsP(p); if(!w.includes(tile.k)||furitenBy(p,w))return null;
   const c=handCounts(p); c[tile.k]++;
-  return evaluate(c,tile.k,ctxFor(p,false,extra),fixedOf(p));
+  return evaluate(c,tile.k,ctxFor(p,false,Object.assign({aka:akaCount(p)+(tile.r?1:0)},extra)),fixedOf(p));
 }
 function riichiOptions(p){
   if(S.riichi[p]||nm(p)&&S.melds[p].some(m=>m.type!=='ankan')||S.scores[p]<1000||S.wall.length<4)return[];
@@ -747,6 +760,7 @@ function cpuWantsChi(p,tile,pat){if(S.riichi.some((r,i)=>r&&i!==p))return false;
 function tileValue(p,k){
   let v=isHonor(k)?(isYakuhaiFor(p,k)?1:0):isTerm(k)?1:(k%9===1||k%9===7)?2:3;
   if(S.doraInd.some(t=>doraOf(t.k)===k))v+=4;
+  if(S.hands[p].some(t=>t.k===k&&t.r))v+=2;
   return v;
 }
 function cpuChoose(p){
@@ -773,7 +787,7 @@ function cpuChoose(p){
     }else pick=ev.slice().sort((a,b)=>a.dg-b.dg||a.sh-b.sh||b.uk-a.uk)[0];
   }else pick=ev.slice().sort((a,b)=>b.off-a.off||a.sh-b.sh||b.uk-a.uk||a.val-b.val)[0];
   const same=h.filter(t=>t.k===pick.k);
-  const tile=same.find(t=>t.g)||same[0];
+  const tile=same.find(t=>t.g&&!t.r)||same.find(t=>!t.r)||same[0];
   return{id:tile.id,riichi:riichiOptions(p).includes(tile.id)};
 }
 function cpuAct(p){
@@ -879,7 +893,7 @@ function toWire(){
   return{code:NET.code,ep:NET.ep,seq:++NET.seq,ph:s.phase,sc:s.scores,dl:s.dealer,hn:s.handNo,hb:s.honba,pot:s.pot,wl:s.wall.length,
     dora:E(s.doraInd),ura:(s.phase==='result'||s.phase==='over')?E(s.uraInd):'',h:s.hands.map(E),dr:s.drawn,
     md:s.melds.map(ms=>ms.map(m=>[m.type,m.k,E(m.tiles),m.from,m.calledId??-1])),ds:s.discards.map(E),
-    dc:s.discards.map(d=>d.map((t,i)=>t.called?i:-1).filter(i=>i>=0)),ri:s.riichi,rx:s.riichiIdx,ip:s.ippatsu,fu:s.furitenTemp,kz:s.kuikae,n:s.n,kt:(s.kita||[[],[],[],[]]).map(E),
+    dc:s.discards.map(d=>d.map((t,i)=>t.called?i:-1).filter(i=>i>=0)),ri:s.riichi,rx:s.riichiIdx,ip:s.ippatsu,fu:s.furitenTemp,kz:s.kuikae,n:s.n,ak:s.aka,ai:s.akaIds,kt:(s.kita||[[],[],[],[]]).map(E),
     tn:s.turn,ld:s.lastDiscard,rs:s.rinshan,msg:String(s.msg||'').slice(0,200),aw:s.awaiting,rl:s.result,nm:s.names,hm:s.humans,cf:s.claim?[s.claim.from,s.claim.tid]:null,busy:!!s.next};
 }
 function fromWire(d){
@@ -893,6 +907,8 @@ function fromWire(d){
   s.discards.forEach((ds,p)=>dc[p].forEach(i=>{if(ds[i])ds[i].called=true;}));
   s.riichi=arr4(d.ri,Boolean); s.riichiIdx=arr4(d.rx,x=>num(x,-1)); s.ippatsu=arr4(d.ip,Boolean); s.furitenTemp=arr4(d.fu,Boolean);
   s.kuikae=arr4(d.kz,x=>Array.isArray(x)?x.map(clampK):[]); s.kita=arr4(d.kt,D);
+  s.aka=[0,1,2].includes(d.ak)?d.ak:0; s.akaIds=akaIdsFor(s.n,s.aka);
+  for(const t of [...s.hands.flat(),...s.discards.flat(),...s.kita.flat(),...s.melds.flat().flatMap(m=>m.tiles),...s.doraInd,...s.uraInd])if(s.akaIds.includes(t.id))t.r=true;
   s.turn=clampSeat(d.tn); s.lastDiscard=d.ld==null?null:num(d.ld); s.rinshan=!!d.rs; s.msg=String(d.msg||'');
   s.awaiting=d.aw&&typeof d.aw==='object'?sanitizeAw(d.aw):null; s.result=d.rl&&typeof d.rl==='object'?d.rl:null;
   s.names=arr4(d.nm,x=>x==null?null:cleanNick(x)); s.humans=arr4(d.hm,x=>typeof x==='string'?x:null);
@@ -972,7 +988,7 @@ async function hostTable(resume,n=4){
     S=saved.S; NET.code=saved.code; S.humans[0]=NET.cid;
   }else{
     lsSet('glass-nick',NET.nick);
-    NET.code=randCode(); S=blankState('lobby',n===3?3:4); S.humans=[NET.cid,null,null,null]; S.names=[NET.nick||'ホスト',null,null,null];
+    NET.code=randCode(); S=blankState('lobby',n===3?3:4); S.aka=UI.aka; S.humans=[NET.cid,null,null,null]; S.names=[NET.nick||'ホスト',null,null,null];
   }
   NET.mode='host'; NET.ep=Date.now(); NET.seq=0; ME=0; SPECT=false; NET.err=''; NET.lastAd='';
   try{NET.tr=await api.join('t-'+NET.code);}catch(e){NET.mode='solo';NET.err='卓を作れませんでした。時間をおいてもう一度お試しください。';S=blankState('netmenu');render();return;}
@@ -1015,17 +1031,17 @@ function startNet(){
   if(NET.mode!=='host'||S.phase!=='lobby')return;
   let c=0; const N=NP(); const names=S.names.map((n,i)=>i>=N?null:S.humans[i]?n:'CPU'+(++c));
   const humans=S.humans.slice();
-  initGame(names,humans,N); advertise();
+  initGame(names,humans,N,S.aka); advertise();
 }
 function againNet(){
   if(NET.mode!=='host')return;
   const humans=S.humans.slice(),names=S.names.map((n,i)=>humans[i]?n:null);
-  clearTimeout(timer); S=blankState('lobby',NP()); S.humans=humans; S.names=names; render(); advertise();
+  const ak=S.aka; clearTimeout(timer); S=blankState('lobby',NP()); S.aka=ak; S.humans=humans; S.names=names; render(); advertise();
 }
 
 /* ---------- rendering ---------- */
 const $=id=>document.getElementById(id);
-function tileEl(t,cls=''){return `<div class="tile ${t.g?'glass':'solid'} ${cls}" title="${tileName(clampK(t.k))}${t.g?'（透明）':'（不透明）'}">${faceSVG(t.k)}</div>`;}
+function tileEl(t,cls=''){return `<div class="tile ${t.g?'glass':'solid'} ${t.r?'aka':''} ${cls}" title="${t.r?'赤':''}${tileName(clampK(t.k))}${t.g?'（透明）':'（不透明）'}">${faceSVG(t.k,t.r)}</div>`;}
 const backEl=(cls='')=>`<div class="tile back ${cls}"></div>`;
 function riverHTML(p){
   const d=S.discards[p];
@@ -1061,7 +1077,7 @@ function myHandHTML(){
     const ok=canDis&&allowedLocal(t.id);
     const cls=[t.g?'glass':'solid',ok?'can':'',UI.sel===t.id?'sel':'',canDis&&!ok?'dim':'',rec.includes(t.k)?'rec':''].join(' ');
     if(UI.view&&!t.g)return `<button class="tile back ${cls}" data-id="${t.id}" ${ok?'':'disabled'} aria-label="${tileName(t.k)}"></button>`;
-    return `<button class="tile ${cls}" data-id="${t.id}" ${ok?'':'disabled'} aria-label="${tileName(t.k)}${t.g?' 透明':' 不透明'}">${faceSVG(t.k)}</button>`;
+    return `<button class="tile ${cls} ${t.r?'aka':''}" data-id="${t.id}" ${ok?'':'disabled'} aria-label="${t.r?'赤':''}${tileName(t.k)}${t.g?' 透明':' 不透明'}">${faceSVG(t.k,t.r)}</button>`;
   };
   return main.map(one).join('')+(d?'<span class="gap"></span>'+one(d):'')+`<span class="melds">${meldsHTML(ME)}</span>`;
 }
@@ -1144,6 +1160,8 @@ function rulesHTML(){
   <ul><li>4人打ち東風戦4局、持ち点25,000点。ひとりならCPU3人と、友達と対局なら空席にCPUが入ります。</li><li>ポン・チー・カン（明槓・暗槓・加槓）あり。喰いタン・後付けあり、喰い替えなし。カンドラは即乗り、嶺上開花・槍槓あり。</li><li>手牌は種類順に並ぶので、伏せ牌の<b>位置</b>からも中身を推理できます。鳴くときは透明な牌から晒し、不透明牌は手の内に残ります。</li><li>CPUもあなたの硝子牌を見て、危険牌を避けたり残り枚数を数えたりします。</li></ul>
   <h3>三人打ち</h3>
   <ul><li>萬子の二〜八を抜いた108枚。チーなし。持ち点35,000点の東風戦3局。</li><li>北は<b>北抜き</b>で抜きドラに（1枚1翻、嶺上牌を補充）。リーチ中に引いた北は自動で抜きます。</li><li>抜いた北でロン和了できます（槍槓は付きません）。</li><li>ツモ損なしの<b>折半</b>：子のツモは北家の分を親子で半分ずつ負担（例：満貫8,000は親5,000・子3,000）。親のツモは子が満貫なら6,000ずつ。</li><li>ドラ表示が一萬なら九萬、九萬なら一萬がドラ。ノーテン罰符は2,000点。</li></ul>
+  <h3>赤ドラ</h3>
+  <ul><li>タイトル画面（友達と対局ではロビー）で選べます。標準：四麻は五萬・五筒・五索に1枚ずつ、三麻は五筒・五索に1枚ずつ。多め：四麻は五筒が2枚、三麻は五筒・五索が2枚ずつ。</li><li>赤ドラは透明な硝子牌なので、持っていると他家にも見えます。1枚1翻（役が必要）。</li></ul>
   <h3>和了と点数</h3>
   <ul><li>通常の役・翻・符で計算。鳴くと門前役は消え、三色・一通・チャンタ・染め手は喰い下がり。</li><li>ロンには役が必要。フリテンあり。ダブロンなし（上家取り）。</li><li>流局時はノーテン罰符3,000点。親が和了か聴牌なら連荘。誰かが0点未満で終了。</li></ul>
   <h3>操作</h3>
@@ -1173,7 +1191,8 @@ function renderOverlay(){
     try{const h=JSON.parse(lsGet('glass-host')||'null');if(h&&h.code)resume+=`<button class="btn" data-o="resumeHost">卓 ${esc(h.code)} を再開（ホスト）</button>`;}catch(e){}
     const g=lsGet('glass-guest'); if(g&&/^[a-z0-9]{4}$/.test(g))resume+=`<button class="btn" data-o="rejoin">卓 ${esc(g)} に戻る</button>`;
     const btns=`<div class="actions"><button class="btn primary" data-o="solo">ひとりで四麻</button><button class="btn primary" data-o="solo3">ひとりで三麻</button><button class="btn primary" data-o="net">友達と対局</button>${resume}</div>`;
-    html=`<h2>硝子牌麻雀<small>Glass Tile Mahjong</small></h2>${btns}${rulesHTML()}${btns}`;
+    const akaRow=`<div class="field"><label>赤ドラ</label><div class="actions">${[0,1,2].map(l=>`<button class="ghost" data-o="aka${l}" aria-pressed="${UI.aka===l}">${AKA_LABEL[l]}</button>`).join('')}<span class="hint">${UI.aka?`四麻${akaIdsFor(4,UI.aka).length}枚・三麻${akaIdsFor(3,UI.aka).length}枚`:'赤ドラなし'}</span></div></div>`;
+    html=`<h2>硝子牌麻雀<small>Glass Tile Mahjong</small></h2>${btns}${akaRow}${rulesHTML()}${btns}`;
   }
   else if(S.phase==='netmenu'){
     key='netmenu';
@@ -1192,7 +1211,7 @@ function renderOverlay(){
     const host=NET.mode==='host',seated=S.humans.includes(NET.cid);
     html=`<h2>卓<small>コード</small> <span class="bigcode">${esc(NET.code)}</span></h2>
     <p class="lead">${host?'友達に卓コードを伝えるか、「友達と対局」の一覧から参加してもらってください。空いた席にはCPUが入ります。':seated?'ホストが対局を始めるのを待っています。':'満席のため観戦になります。'}</p>
-    ${host?`<div class="actions"><button class="ghost" data-o="mode4" aria-pressed="${NP()===4}">四人打ち</button><button class="ghost" data-o="mode3" aria-pressed="${NP()===3}">三人打ち</button></div>`:`<p class="lead">${NP()===3?'三人打ち':'四人打ち'}</p>`}${seatsHTML()}${err}
+    ${host?`<div class="actions"><button class="ghost" data-o="mode4" aria-pressed="${NP()===4}">四人打ち</button><button class="ghost" data-o="mode3" aria-pressed="${NP()===3}">三人打ち</button></div><div class="actions"><span class="hint">赤ドラ</span>${[0,1,2].map(l=>`<button class="ghost" data-o="aka${l}" aria-pressed="${S.aka===l}">${AKA_LABEL[l]}</button>`).join('')}<span class="hint">${akaDesc(NP(),S.aka)}</span></div>`:`<p class="lead">${NP()===3?'三人打ち':'四人打ち'} · 赤ドラ ${akaDesc(NP(),S.aka)}</p>`}${seatsHTML()}${err}
     <div class="actions">${host?'<button class="btn primary" data-o="startNet">対局開始</button><button class="btn" data-o="leaveNet">卓を閉じる</button>':'<button class="btn" data-o="leaveNet">退出</button>'}</div>`;
   }
   else if(S.phase==='result'&&S.result){
@@ -1243,6 +1262,7 @@ $('panel').addEventListener('click',e=>{
   else if(o==='solo'){UI.help=false;newSolo(4);}
   else if(o==='solo3'){UI.help=false;newSolo(3);}
   else if(o==='mode3'||o==='mode4'){setMode(o==='mode3'?3:4);}
+  else if(/^aka[012]$/.test(o)){const l=+o[3];UI.aka=l;saveUI();if(NET.mode==='host'&&S.phase==='lobby'){S.aka=l;}render();}
   else if(o==='net'){NET.err='';S=blankState('netmenu');render();netReady().then(()=>{if(S.phase==='netmenu'){const ni=$('nickIn');if(ni&&!ni.value&&NET.nick)ni.value=NET.nick;updateTableList();}});}
   else if(o==='back'){NET.err='';S=blankState('title');render();}
   else if(o==='host'||o==='host3'){if(!NET.nick){NET.err='表示名を入力してください。';$('panel').dataset.view='';render();return;}hostTable(false,o==='host3'?3:4);}
